@@ -52,5 +52,6 @@ for layer in manifest.content["layers"]:
 # CLI copy tool
 
 ```
-pyregistry --src ubuntu:18.04 --dst my.private.registry/my-repo:my-tag --dst-user msg:secretpassword
+# By default it will pull credentials based on ~/.docker/config.json 
+pyregistry --src ubuntu:18.04 --dst my.private.registry/my-repo:my-tag
 ```

@@ -27,6 +27,8 @@ import urllib
 
 import requests
 
+from .auth import CredentialStore, DictCredentialStore
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -148,7 +150,8 @@ class RegistryAuthenticator:
     def __init__(self) -> None:
         self.access_tokens: Dict[Tuple[str, str], str] = {}
 
-    def auth_key(self, url: str) -> Tuple[str, str]:
+    @staticmethod
+    def auth_key(url: str) -> Tuple[str, str]:
         """
         Returns a hashable key for the domain covered by the registry url.
         """
@@ -489,7 +492,8 @@ class RegistryBlobRef:
             "/".join(self.repo), self.OBJECT_TYPE, upload_uuid
         )
 
-    def sub_objects(self) -> Iterable["RegistryBlobRef"]:
+    @staticmethod
+    def sub_objects() -> Iterable["RegistryBlobRef"]:
         """
         Returns any refs underneath this ref. This just applies to
         manifest refs.
@@ -665,14 +669,14 @@ def parse_image_name(
     verify: Optional[str] = None,
     client_cert: Optional[str] = None,
     user: Optional[Tuple[str, str]] = None,
-    auth_map: Optional[Dict[str, Tuple[str, str]]] = None,
+    cred_store: CredentialStore = None,
 ) -> RegistryManifestRef:
     """
     Extract out the registry host, image repo, and tag from an image string.
 
     urllib.parse does not work appropriately for this task.
     """
-    auth_map = auth_map or {}
+    cred_store = cred_store or DictCredentialStore({})
 
     # Extract protocol if present. If no protocol is present it will be
     # set to a default value depending on the hostname.
@@ -718,7 +722,7 @@ def parse_image_name(
             is_https=prot == "https",
             verify=verify,
             client_cert=client_cert,
-            user=auth_map.get(host_alias, user),
+            user=cred_store.get(host_alias) or user,
             host_alias=host_alias,
         )
     else:
@@ -728,7 +732,7 @@ def parse_image_name(
             is_https=True,
             verify=verify,
             client_cert=client_cert,
-            user=auth_map.get("docker.io", user),
+            user=cred_store.get("docker.io") or user,
             host_alias="docker.io",
         )
 

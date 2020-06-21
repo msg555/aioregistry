@@ -1,0 +1,4 @@
+[MASTER]
+
+# As a philosophy disable too-many/too-little checkers
+disable=fixme,bad-continuation,too-many-instance-attributes,too-many-branches,too-many-statements,too-few-public-methods,too-many-locals,invalid-name,too-many-nested-blocks,broad-except,too-many-return-statements,too-many-arguments

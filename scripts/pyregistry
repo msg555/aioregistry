@@ -4,10 +4,12 @@ Script entrypoint for copying images between registries.
 """
 
 import argparse
+import json
 import logging
+import pathlib
 import sys
 
-from pyregistry import parse_image_name, parse_user
+from pyregistry import parse_image_name, parse_user, DockerCredentialStore
 
 
 def main() -> None:
@@ -41,17 +43,30 @@ def main() -> None:
     parser.add_argument(
         "--dst-ca", required=False, default=None, help="Dest CA certificate"
     )
+    parser.add_argument(
+        "--auth-config",
+        required=False,
+        default="{}/.docker/config.json".format(pathlib.Path.home()),
+        help="Path to Docker credential config file"
+    )
     args = parser.parse_args()
 
+    cred_store = None
+    try:
+        with open(args.auth_config, "r") as fconfig:
+            cred_store = DockerCredentialStore(json.load(fconfig))
+    except FileNotFoundError:
+        pass
+
     src_manifest = parse_image_name(
-        args.src, user=parse_user(args.src_user), verify=args.src_ca
+        args.src, user=parse_user(args.src_user), verify=args.src_ca, cred_store=cred_store
     )
     if not args.dst:
         print(src_manifest.manifest().serialize().decode())
         return
 
     dst_manifest = parse_image_name(
-        args.dst, user=parse_user(args.dst_user), verify=args.dst_ca
+        args.dst, user=parse_user(args.dst_user), verify=args.dst_ca, cred_store=cred_store
     )
     src_manifest.copy(dst_manifest)
 
