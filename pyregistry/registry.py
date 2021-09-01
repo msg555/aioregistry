@@ -23,7 +23,7 @@ from typing import (
     Sequence,
     Tuple,
 )
-import urllib
+import urllib.parse
 
 import requests
 
@@ -157,7 +157,7 @@ class RegistryAuthenticator:
         """
         url_data = urllib.parse.urlparse(url)
         path_parts = url_data.path.split("/")
-        return (url_data.hostname, "/".join(path_parts[0:4]))
+        return (url_data.hostname or "", "/".join(path_parts[0:4]))
 
     def request(
         self,
@@ -422,6 +422,22 @@ class Registry:
             "https" if self.is_https else "http", self.host, self.port
         )
 
+    def get_repos(self) -> List[str]:
+        """
+        Return a list of all repos for the given registry. It is up to the
+        registry implementation to determine what if any repo names will
+        be returned.
+        """
+        result = self.request("/v2/_catalog").json()
+        return result["repositories"]
+
+    def get_tags(self, repo: List[str]) -> List[str]:
+        """
+        Return a list of all tags for the given repo name.
+        """
+        result = self.request(f"/v2/{'/'.join(repo)}/tags/list").json()
+        return result["tags"]
+
     def request(
         self, url: str, method="GET", has_host=False, raise_for_status=True, **kwargs
     ) -> requests.Response:
@@ -434,15 +450,13 @@ class Registry:
             headers={"Accept": ",".join(MANIFEST_MEDIA_TYPE_MAP) + ", */*"},
             allow_redirects=True,
         )
-        request_kwargs["headers"].update(  # type: ignore
-            kwargs.pop("headers", {})
-        )
+        request_kwargs["headers"].update(kwargs.pop("headers", {}))  # type: ignore
         request_kwargs.update(kwargs)
         if not has_host:
             url = self.url() + url
 
-        resp = self.requester.request(  # type: ignore
-            url, method=method, **request_kwargs
+        resp = self.requester.request(
+            url, method=method, **request_kwargs  # type: ignore
         )
         if raise_for_status:
             resp.raise_for_status()
@@ -492,8 +506,8 @@ class RegistryBlobRef:
             "/".join(self.repo), self.OBJECT_TYPE, upload_uuid
         )
 
-    @staticmethod
-    def sub_objects() -> Iterable["RegistryBlobRef"]:
+    # pylint: disable=no-self-use
+    def sub_objects(self) -> Iterable["RegistryBlobRef"]:
         """
         Returns any refs underneath this ref. This just applies to
         manifest refs.
@@ -508,7 +522,7 @@ class RegistryBlobRef:
         return self.ref
 
     def get_copy_pairs(
-        self, registry: Registry, repo: str, ref: Optional[str] = None
+        self, registry: Registry, repo: List[str], ref: Optional[str] = None
     ) -> Iterable[BlobCopyPair]:
         """
         Returns the list of object pairs that need to be copied to copy this
@@ -611,7 +625,7 @@ class RegistryManifestRef(RegistryBlobRef):
     OBJECT_TYPE = "manifests"
 
     def __init__(self, *args, **kwargs) -> None:
-        super(RegistryManifestRef, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._manifest: Optional[Manifest] = None
 
     def manifest(self) -> Any:
@@ -645,7 +659,7 @@ class RegistryManifestRef(RegistryBlobRef):
         resp.raise_for_status()
         return True
 
-    def sub_objects(self) -> Iterable[RegistryBlobRef]:
+    def sub_objects(self) -> Iterable["RegistryBlobRef"]:
         """
         Returns all blob refs underneath this manifest. This could potentially
         be other manifests in the case of manifest lists.

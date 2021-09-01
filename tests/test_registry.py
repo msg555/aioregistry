@@ -20,7 +20,7 @@ class RegistryTest(unittest.TestCase):
     """
 
     def test_parse_user(self) -> None:
-        """ Test parse_user """
+        """Test parse_user"""
         self.assertIs(parse_user(""), None)
         self.assertEqual(parse_user("msg"), ("msg", ""))
         self.assertEqual(parse_user("msg:pwd"), ("msg", "pwd"))
@@ -43,7 +43,7 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(manifest_ref.ref, ref)
 
     def test_parse_image_ref_handling(self) -> None:
-        """ Test handling of refs """
+        """Test handling of refs"""
         # Test basic ref handling
         self._check_image(
             "ubuntu",
@@ -77,7 +77,7 @@ class RegistryTest(unittest.TestCase):
         )
 
     def test_parse_image_localhost_handling(self) -> None:
-        """ Test handling of localhost hosted image names """
+        """Test handling of localhost hosted image names"""
         # localhost is special
         self._check_image(
             "localhost/msg",
@@ -146,7 +146,7 @@ class RegistryTest(unittest.TestCase):
         )
 
     def test_parse_image_explicit_protocol(self) -> None:
-        """ Test handling of localhost hosted image names """
+        """Test handling of localhost hosted image names"""
         # Explicit protocol
         self._check_image(
             "http://localhost/msg",
@@ -199,7 +199,7 @@ class RegistryTest(unittest.TestCase):
         )
 
     def _test_copy_pairs(self) -> None:
-        """ Test copy pairs  """
+        """Test copy pairs"""
         # Note this test actually queries docker.io for manifest data. It does
         # not download any layer data nor write any data.
         expected_shas = (
@@ -272,7 +272,7 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(manifest_pair.dst.ref, "dest_tag")
 
     def test_chunk_streamer(self) -> None:
-        """ Test the chunk_streamer implementation """
+        """Test the chunk_streamer implementation"""
 
         def _test(seq, chunk_size, expected):
             """
@@ -293,7 +293,7 @@ class RegistryTest(unittest.TestCase):
         )
 
     def test_exists(self) -> None:
-        """ Test behavior of ManifestRef.exists() """
+        """Test behavior of ManifestRef.exists()"""
         self.assertEqual(parse_image_name("msg555/ubuntu:_test_tag_").exists(), True)
         self.assertEqual(parse_image_name("msg555/ubuntu:_fake_tag_").exists(), False)
         self.assertRaises(

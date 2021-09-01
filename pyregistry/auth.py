@@ -92,7 +92,7 @@ class DockerCredentialStore(CredentialStore):
         # Return credentials from cache if they exist.
         auth = self.auths.get(host, False)
         if auth is not False:
-            return auth
+            return auth  # type: ignore
 
         # Determine what storage helper we should use.
         store = self.host_stores.get(host, self.default_store)

@@ -28,7 +28,8 @@ class AuthTest(unittest.TestCase):
 
         for host, auth in creds.items():
             self.assertEqual(
-                cred_store.get(host), auth,
+                cred_store.get(host),
+                auth,
             )
 
         self.assertIsNone(cred_store.get("other.io"))
@@ -52,7 +53,8 @@ class AuthTest(unittest.TestCase):
 
         for host, auth in creds.items():
             self.assertEqual(
-                cred_store.get(host), auth,
+                cred_store.get(host),
+                auth,
             )
 
         self.assertIsNone(cred_store.get("other.io"))
@@ -76,7 +78,8 @@ class AuthTest(unittest.TestCase):
             with patch("pyregistry.auth.DockerCredentialStore._query_helper") as qhelp:
                 qhelp.return_value = {"Username": user, "Secret": password}
                 self.assertEqual(
-                    cred_store.get(host), (user, password) if user else None,
+                    cred_store.get(host),
+                    (user, password) if user else None,
                 )
                 if expect_cached:
                     qhelp.assert_not_called()

@@ -1,8 +1,22 @@
+.PHONY: format format-check pylint typecheck lint test docs
+
+PYTHON := python3
+
+all: format lint test docs
+
+format:
+	$(PYTHON) -m black . scripts/pyregistry
+
+format-check:
+	$(PYTHON) -m black --check . scripts/pyregistry
+
+pylint:
+	$(PYTHON) -m pylint pyregistry scripts tests
+
+typecheck:
+	$(PYTHON) -m mypy pyregistry
+
+lint: format-check pylint typecheck
+
 test:
-	python setup.py test
-
-build:
-	python3 setup.py sdist bdist_wheel
-
-clean:
-	rm -rf build dist pyregistry.egg-info
+	$(PYTHON) -m unittest discover -v tests/
