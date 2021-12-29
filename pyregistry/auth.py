@@ -7,6 +7,7 @@ import base64
 import json
 import logging
 import locale
+import os
 import subprocess
 from typing import Any, Mapping, Optional, Tuple
 
@@ -50,6 +51,18 @@ class DockerCredentialStore(CredentialStore):
             for host, auth in config.get("auths", {}).items()
             if auth.get("auth")
         }
+
+    @classmethod
+    def from_file(cls, path=None) -> "DockerCredentialStore":
+        """
+        Load the docker config from a file. If `path` is None then the default
+        path for docker config will be used.
+
+        Raises FileNotFoundError if the file could not be opened.
+        """
+        path = path or os.path.expanduser("~/.docker/config.json")
+        with open(path, "r") as fconfig:
+            return cls(json.load(fconfig))
 
     @staticmethod
     def _query_helper(store: str, host: str) -> Any:
