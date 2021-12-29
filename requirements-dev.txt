@@ -2,4 +2,6 @@ pylint==2.9.6
 pylint-pydantic~=0.1
 mypy==0.910
 black==21.7b0
+sphinx~=4.3
+sphinx_rtd_theme~=1.0
 types-requests==2.25.6

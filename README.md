@@ -51,11 +51,11 @@ for layer in manifest.content["layers"]:
 
 # CLI copy tool
 
-```
+```sh
 # By default it will pull credentials based on ~/.docker/config.json 
-pyregistry --src ubuntu:18.04 --dst my.private.registry/my-repo:my-tag
+python -m pyregistry --src ubuntu:18.04 --dst my.private.registry/my-repo:my-tag
 ```
 
-```
+```sh
 # Copy all tags matching regex
-pyregistry --src ubuntu --dst my.private.registry/my-repo --tag-pattern '18\..*'
+python -m pyregistry --src ubuntu --dst my.private.registry/my-repo --tag-pattern '18\..*'
