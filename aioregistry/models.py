@@ -5,7 +5,6 @@ from typing import (
     Any,
     Dict,
     List,
-    Literal,
     Optional,
 )
 
@@ -13,6 +12,12 @@ from pydantic import (
     BaseModel,
     Field,
 )
+
+try:
+    from typing import Literal
+except ImportError:
+    # python 3.7 compatibility
+    from typing_extensions import Literal  # type: ignore
 
 
 # https://docs.docker.com/registry/spec/manifest-v2-2/
