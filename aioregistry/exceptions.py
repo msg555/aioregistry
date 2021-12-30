@@ -1,4 +1,4 @@
-class PyRegistryException(Exception):
+class RegistryException(Exception):
     """
-    Base class for all PyRegistry exceptions.
+    Base class for all aioregistry exceptions.
     """

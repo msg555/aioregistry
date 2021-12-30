@@ -22,7 +22,7 @@ from .auth import (
     CredentialStore,
     DictCredentialStore,
 )
-from .exceptions import PyRegistryException
+from .exceptions import RegistryException
 from .models import (
     MANIFEST_TYPE_MAP,
     Manifest,
@@ -143,7 +143,7 @@ class AsyncRegistryClient:
 
             www_auth = response.headers.get("WWW-Authenticate", "")
             if not www_auth.startswith("Bearer "):
-                raise PyRegistryException("Failed to make request, unauthorized")
+                raise RegistryException("Failed to make request, unauthorized")
 
             auth_parts = split_quote(www_auth[7:], "=,")
             auth_args = {
@@ -158,7 +158,7 @@ class AsyncRegistryClient:
                 timeout=self.timeout,
             ) as auth_resp:
                 if auth_resp.status != 200:
-                    raise PyRegistryException("Failed to generate authentication token")
+                    raise RegistryException("Failed to generate authentication token")
                 self.access_tokens[auth_key] = (await auth_resp.json())["access_token"]
 
             first_attempt = False
@@ -167,7 +167,7 @@ class AsyncRegistryClient:
         """
         Test if the object exists in the remote registry. If the registry
         returns 404 Not Found or 401 Unauthorized this will return false. Any
-        other response wil raise a PyRegistryException.
+        other response wil raise a RegistryException.
         """
         registry = ref.registry or self.default_registry
         try:
@@ -176,9 +176,9 @@ class AsyncRegistryClient:
                     return True
                 if response.status in (401, 404):
                     return False
-                raise PyRegistryException("Unexpected response from registry")
+                raise RegistryException("Unexpected response from registry")
         except aiohttp.ClientError as exc:
-            raise PyRegistryException("failed to contact registry") from exc
+            raise RegistryException("failed to contact registry") from exc
 
     async def manifest_resolve_tag(
         self, ref: RegistryManifestRef
@@ -197,17 +197,17 @@ class AsyncRegistryClient:
                 if response.status == 200:
                     digest = response.headers.get("Docker-Content-Digest")
                     if digest is None:
-                        raise PyRegistryException("No digest given by server for tag")
+                        raise RegistryException("No digest given by server for tag")
                     return RegistryManifestRef(
                         registry=ref.registry,
                         repo=ref.repo,
                         ref=digest,
                     )
                 if response.status in (401, 404):
-                    raise PyRegistryException("Cannot access repo")
-                raise PyRegistryException("Unexpected response from registry")
+                    raise RegistryException("Cannot access repo")
+                raise RegistryException("Unexpected response from registry")
         except aiohttp.ClientError as exc:
-            raise PyRegistryException("failed to contact registry") from exc
+            raise RegistryException("failed to contact registry") from exc
 
     async def ref_content_stream(
         self,
@@ -222,7 +222,7 @@ class AsyncRegistryClient:
         try:
             async with await self._request("GET", registry, ref.url) as response:
                 if response.status != 200:
-                    raise PyRegistryException(
+                    raise RegistryException(
                         f"Unexpected response from registry HTTP {response.status}"
                     )
 
@@ -242,7 +242,7 @@ class AsyncRegistryClient:
                         cur_chunk.append(chunk)
 
         except aiohttp.ClientError as exc:
-            raise PyRegistryException("failed to contact registry") from exc
+            raise RegistryException("failed to contact registry") from exc
 
         if cur_chunk:
             yield b"".join(cur_chunk)
@@ -255,17 +255,17 @@ class AsyncRegistryClient:
         try:
             async with await self._request("GET", registry, ref.url) as response:
                 if response.status != 200:
-                    raise PyRegistryException(
+                    raise RegistryException(
                         f"Unexpected response from registry HTTP {response.status}"
                     )
                 try:
                     manifest_data = json.loads(await response.text())
                 except ValueError as exc:
-                    raise PyRegistryException(
+                    raise RegistryException(
                         "Failed decoding JSON response from registry"
                     ) from exc
         except aiohttp.ClientError as exc:
-            raise PyRegistryException("failed to contact registry") from exc
+            raise RegistryException("failed to contact registry") from exc
 
         return Manifest.parse(
             manifest_data,
@@ -286,7 +286,7 @@ class AsyncRegistryClient:
             try:
                 return (await response.json())["repositories"]
             except ValueError as exc:
-                raise PyRegistryException("Unexpected response getting repos") from exc
+                raise RegistryException("Unexpected response getting repos") from exc
 
     async def registry_repo_tags(
         self, registry: Optional[Registry], repo: List[str]
@@ -302,7 +302,7 @@ class AsyncRegistryClient:
             try:
                 return (await response.json())["tags"]
             except ValueError as exc:
-                raise PyRegistryException(
+                raise RegistryException(
                     "Unexpected response getting repo tags"
                 ) from exc
 
@@ -362,7 +362,7 @@ class AsyncRegistryClient:
                 headers={"Content-Type": manifest.get_media_type()},
             ) as response:
                 if response.status // 100 != 2:
-                    raise PyRegistryException("Failed to copy manifest")
+                    raise RegistryException("Failed to copy manifest")
 
             LOGGER.info("Copied manifest %s -> %s", src, dst)
             return True
@@ -374,7 +374,7 @@ class AsyncRegistryClient:
             dst.upload_url(),
         ) as response:
             if response.status // 100 != 2:
-                raise PyRegistryException(
+                raise RegistryException(
                     "Unexpected response attempting to start blob copy"
                 )
             upload_location = response.headers["Location"]
@@ -389,7 +389,7 @@ class AsyncRegistryClient:
                 has_host=True,
             ) as response:
                 if response.status // 100 != 2:
-                    raise PyRegistryException("Unexpected response writing blob data")
+                    raise RegistryException("Unexpected response writing blob data")
                 upload_location = response.headers["Location"]
 
         async with await self._request(
@@ -399,7 +399,7 @@ class AsyncRegistryClient:
             has_host=True,
         ) as response:
             if response.status // 100 != 2:
-                raise PyRegistryException("Unexpected response ending blob copy")
+                raise RegistryException("Unexpected response ending blob copy")
 
         LOGGER.info("Copied blob %s -> %s", src, dst)
         return True

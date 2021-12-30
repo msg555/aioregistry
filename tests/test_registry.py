@@ -5,7 +5,7 @@ import asyncio
 import unittest
 
 from aioregistry.client import AsyncRegistryClient
-from aioregistry.exceptions import PyRegistryException
+from aioregistry.exceptions import RegistryException
 from aioregistry.models import Registry
 from aioregistry.parsing import parse_image_name
 
@@ -160,7 +160,7 @@ class RegistryTest(unittest.TestCase):
             self.assertFalse(
                 await client.ref_exists(parse_image_name("msg555/ubuntu:_fake_tag_"))
             )
-            with self.assertRaises(PyRegistryException):
+            with self.assertRaises(RegistryException):
                 await client.ref_exists(
                     parse_image_name("fake.repo/msg555/ubuntu:_fake_tag_")
                 )

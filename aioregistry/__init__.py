@@ -7,7 +7,7 @@ from .auth import (
     DictCredentialStore,
 )
 from .client import AsyncRegistryClient
-from .exceptions import PyRegistryException
+from .exceptions import RegistryException
 from .models import (
     Manifest,
     ManifestDescriptor,
