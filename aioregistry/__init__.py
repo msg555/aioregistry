@@ -1,5 +1,5 @@
 """
-Expose public pyregistry interface
+Expose public aioregistry interface
 """
 from .auth import (
     CredentialStore,

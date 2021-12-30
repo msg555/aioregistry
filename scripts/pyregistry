@@ -1,7 +1,0 @@
-"""Main CLI entry point for pyregistry """
-
-import sys
-from pyregistry.cli import main
-
-sys.argv[0] = "pyregistry"
-sys.exit(main())

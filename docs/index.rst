@@ -4,35 +4,35 @@ dustmaker package
 Submodules
 ----------
 
-pyregistry module
+aioregistry module
 ----------------------
 
-.. automodule:: pyregistry
+.. automodule:: aioregistry
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: pyregistry.client
+.. automodule:: aioregistry.client
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: pyregistry.parsing
+.. automodule:: aioregistry.parsing
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: pyregistry.exceptions
+.. automodule:: aioregistry.exceptions
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: pyregistry.auth
+.. automodule:: aioregistry.auth
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: pyregistry.models
+.. automodule:: aioregistry.models
    :members:
    :undoc-members:
    :show-inheritance:

@@ -18,12 +18,12 @@ sys.path.insert(0, os.path.abspath(".."))
 
 # -- Project information -----------------------------------------------------
 
-project = "pyregistry"
+project = "aioregistry"
 copyright = "2021, Mark Gordon"
 author = "Mark Gordon"
 release = "0.3.0"
 add_module_names = False
-modindex_common_prefix = ["pyregistry."]
+modindex_common_prefix = ["aioregistry."]
 autoclass_content = "both"
 autodoc_member_order = "bysource"
 

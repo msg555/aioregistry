@@ -4,10 +4,10 @@ Tests for the Registry library.
 import asyncio
 import unittest
 
-from pyregistry.client import AsyncRegistryClient
-from pyregistry.exceptions import PyRegistryException
-from pyregistry.models import Registry
-from pyregistry.parsing import parse_image_name
+from aioregistry.client import AsyncRegistryClient
+from aioregistry.exceptions import PyRegistryException
+from aioregistry.models import Registry
+from aioregistry.parsing import parse_image_name
 
 
 def asyncio_run(corofunc):

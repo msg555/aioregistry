@@ -1,11 +1,11 @@
 """
-Tests for the pyregistry.auth module
+Tests for the aioregistry.auth module
 """
 import base64
 import unittest
 from unittest.mock import patch
 
-from pyregistry.auth import (
+from aioregistry.auth import (
     DictCredentialStore,
     DockerCredentialStore,
 )
@@ -13,7 +13,7 @@ from pyregistry.auth import (
 
 class AuthTest(unittest.TestCase):
     """
-    pyregistry.auth tests
+    aioregistry.auth tests
     """
 
     def test_dict_store(self):
@@ -75,7 +75,7 @@ class AuthTest(unittest.TestCase):
             cred_helper, host, user, password, expect_cached=False, query_host=None
         ):
             query_host = query_host or host
-            with patch("pyregistry.auth.DockerCredentialStore._query_helper") as qhelp:
+            with patch("aioregistry.auth.DockerCredentialStore._query_helper") as qhelp:
                 qhelp.return_value = {"Username": user, "Secret": password}
                 self.assertEqual(
                     cred_store.get(host),

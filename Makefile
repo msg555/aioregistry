@@ -5,16 +5,16 @@ PYTHON := python3
 all: format lint test docs
 
 format:
-	$(PYTHON) -m black . scripts/pyregistry
+	$(PYTHON) -m black .
 
 format-check:
-	$(PYTHON) -m black --check . scripts/pyregistry
+	$(PYTHON) -m black --check .
 
 pylint:
-	$(PYTHON) -m pylint pyregistry scripts tests
+	$(PYTHON) -m pylint aioregistry tests
 
 typecheck:
-	$(PYTHON) -m mypy pyregistry
+	$(PYTHON) -m mypy aioregistry
 
 lint: format-check pylint typecheck
 

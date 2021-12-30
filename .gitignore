@@ -1,6 +1,6 @@
 build
 dist
-pyregistry.egg-info
+aioregistry.egg-info
 .venv
 *.pyc
 *.swp
