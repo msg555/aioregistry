@@ -180,6 +180,35 @@ class AsyncRegistryClient:
         except aiohttp.ClientError as exc:
             raise PyRegistryException("failed to contact registry") from exc
 
+    async def manifest_resolve_tag(
+        self, ref: RegistryManifestRef
+    ) -> RegistryManifestRef:
+        """
+        Attempts to resolve the passed manifest ref into a manifest ref identified
+        by a digest. If the manifest ref already is a digest-based ref then it will
+        just return `ref`.
+        """
+        if ref.is_digest_ref():
+            return ref
+
+        registry = ref.registry or self.default_registry
+        try:
+            async with await self._request("HEAD", registry, ref.url) as response:
+                if response.status == 200:
+                    digest = response.headers.get("Docker-Content-Digest")
+                    if digest is None:
+                        raise PyRegistryException("No digest given by server for tag")
+                    return RegistryManifestRef(
+                        registry=ref.registry,
+                        repo=ref.repo,
+                        ref=digest,
+                    )
+                if response.status in (401, 404):
+                    raise PyRegistryException("Cannot access repo")
+                raise PyRegistryException("Unexpected response from registry")
+        except aiohttp.ClientError as exc:
+            raise PyRegistryException("failed to contact registry") from exc
+
     async def ref_content_stream(
         self,
         ref: RegistryBlobRef,
@@ -238,17 +267,10 @@ class AsyncRegistryClient:
         except aiohttp.ClientError as exc:
             raise PyRegistryException("failed to contact registry") from exc
 
-        manifest = Manifest.parse(
+        return Manifest.parse(
             manifest_data,
             media_type=response.headers.get("Content-Type"),
         )
-        digest = response.headers.get("Docker-Content-Digest")
-        if digest is not None:
-            if digest != manifest.digest:
-                raise PyRegistryException(
-                    "digest of manifest does not match digest advertised by registry"
-                )
-        return manifest
 
     async def registry_repos(self, registry: Optional[Registry]) -> List[str]:
         """

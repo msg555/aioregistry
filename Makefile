@@ -31,9 +31,9 @@ clean:
 	rm -rf build dist *.egg-info
 
 pypi-test: build
-  TWINE_USERNAME=__token__ TWINE_PASSWORD="$(shell gpg -d test.pypi-token.gpg)" \
-    $(PYTHON) -m twine upload --repository testpypi dist/*
+	TWINE_USERNAME=__token__ TWINE_PASSWORD="$(shell gpg -d test.pypi-token.gpg)" \
+	  $(PYTHON) -m twine upload --repository testpypi dist/*
 
 pypi-live: build
-  TWINE_USERNAME=__token__ TWINE_PASSWORD="$(shell gpg -d live.pypi-token.gpg)" \
-    $(PYTHON) -m twine upload dist/*
+	TWINE_USERNAME=__token__ TWINE_PASSWORD="$(shell gpg -d live.pypi-token.gpg)" \
+	  $(PYTHON) -m twine upload dist/*

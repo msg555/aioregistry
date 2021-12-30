@@ -69,7 +69,9 @@ class Manifest(BaseModel):
     @property
     def digest(self) -> str:
         """
-        Compute the manifest digest using its canonicalized form.
+        Compute the manifest digest using its canonicalized form. This may
+        differ from the digest used on the registry if the server was using
+        a different canonicalization (which at this point seems likely).
         """
         digest = self.__dict__.get("_digest")
         if digest is not None:
@@ -83,24 +85,21 @@ class Manifest(BaseModel):
 
     def canonical(self) -> str:
         """
-        Calculate the "canonical" form of the manifest. For vnd.docker based
-        manifests this is dependant on the field order of the manifest which
-        we mirror as best we can. Creating stable content addressed manifests
-        is really much harder than it ought to be here.
-
-        For other manifest media types (i.e. vnd.oci manifests) this is done
-        using canonical JSON.
+        Calculate the canonical JSON representation.
         """
         if self.get_media_type().startswith("application/vnd.docker."):
             return self.json(
                 exclude_unset=True,
                 indent=3,
                 separators=(",", ": "),
+                ensure_ascii=False,
                 by_alias=True,
             )
         return self.json(
             exclude_unset=True,
             sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
             by_alias=True,
         )
 
