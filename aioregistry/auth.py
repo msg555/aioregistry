@@ -3,10 +3,10 @@ Defines the CredentialStore interface responsible for providing authentication
 to registries.
 """
 import abc
+import asyncio
 import base64
 import json
 import logging
-import locale
 import os
 import subprocess
 from typing import Any, Mapping, Optional, Tuple
@@ -20,7 +20,7 @@ class CredentialStore(metaclass=abc.ABCMeta):
     """
 
     @abc.abstractmethod
-    def get(self, host: str) -> Optional[Tuple[str, str]]:
+    async def get(self, host: str) -> Optional[Tuple[str, str]]:
         """
         If credentials for the given host are available returns a
         (user, password) tuple containing those credentials. Otherwise
@@ -65,7 +65,7 @@ class DockerCredentialStore(CredentialStore):
             return cls(json.load(fconfig))
 
     @staticmethod
-    def _query_helper(store: str, host: str) -> Any:
+    async def _query_helper(store: str, host: str) -> Any:
         """
         Query the passed storage helper and return the parsed JSON results.
 
@@ -76,22 +76,24 @@ class DockerCredentialStore(CredentialStore):
 
         # Query the storage helper.
         try:
-            presult = subprocess.run(
-                ("docker-credential-{}".format(store), "get"),
+            presult = await asyncio.create_subprocess_exec(
+                "docker-credential-{}".format(store),
+                "get",
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                input=host,
-                encoding=locale.getpreferredencoding(),
-                check=True,
             )
+            stdout, _ = await presult.communicate(host.encode("utf-8"))
+            if presult.returncode != 0:
+                return None
         except OSError:
             return None
         try:
-            return json.loads(presult.stdout)
+            return json.loads(stdout.decode("utf-8"))
         except ValueError:
             return None
 
-    def get(self, host: str) -> Optional[Tuple[str, str]]:
+    async def get(self, host: str) -> Optional[Tuple[str, str]]:
         """
         Gets the credentials for the host. First it checks if the credentials
         are stored literally or have been cached in self.auths. Next we check if
@@ -113,7 +115,7 @@ class DockerCredentialStore(CredentialStore):
             return None
 
         # Query the storage helper.
-        result = self._query_helper(store, host)
+        result = await self._query_helper(store, host)
         if result is None:
             return None
 
@@ -136,7 +138,7 @@ class DictCredentialStore(CredentialStore):
     def __init__(self, auth_map: Mapping[str, Tuple[str, str]]) -> None:
         self.auth_map = dict(auth_map)
 
-    def get(self, host: str) -> Optional[Tuple[str, str]]:
+    async def get(self, host: str) -> Optional[Tuple[str, str]]:
         """
         Return the credentials in the dict if they exist.
         """

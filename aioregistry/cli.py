@@ -6,6 +6,7 @@ Script entrypoint for copying images between registries.
 import argparse
 import json
 import logging
+import os
 import re
 import sys
 
@@ -18,15 +19,6 @@ async def main() -> None:
     """
     CLI entrypoint that copies an image between two registries.
     """
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(message)s")
-    handler.setFormatter(formatter)
-
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    root.addHandler(handler)
-
     parser = argparse.ArgumentParser(
         description="Copy images between registries. If no dest image is given"
         " this will simply output the src manifest"
@@ -47,10 +39,26 @@ async def main() -> None:
     parser.add_argument(
         "--auth-config",
         required=False,
-        default=None,
+        default=os.path.expanduser("~/.docker/config.json"),
         help="Path to Docker credential config file",
     )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="count",
+        default=0,
+    )
     args = parser.parse_args()
+
+    log_level = logging.WARN
+    if args.verbose > 1:
+        log_level = logging.DEBUG
+    elif args.verbose:
+        log_level = logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(message)s",
+    )
 
     creds = None
     if args.auth_config:

@@ -106,7 +106,7 @@ class AsyncRegistryClient:
             raise ValueError("No registry or hostname provided")
 
         auth = None
-        creds = self.creds.get(
+        creds = await self.creds.get(
             registry.host_alias or registry.host if registry else url_data.hostname  # type: ignore
         )
 
@@ -259,7 +259,7 @@ class AsyncRegistryClient:
                         f"Unexpected response from registry HTTP {response.status}"
                     )
                 try:
-                    manifest_data = json.loads(await response.text())
+                    manifest_data = json.loads(await response.text(encoding="utf-8"))
                 except ValueError as exc:
                     raise RegistryException(
                         "Failed decoding JSON response from registry"
