@@ -10,7 +10,7 @@ from .client import AsyncRegistryClient
 from .exceptions import RegistryException
 from .models import (
     Manifest,
-    ManifestDescriptor,
+    Descriptor,
     ManifestListV2S2,
     ManifestV2S2,
     ManifestV1,

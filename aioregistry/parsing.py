@@ -53,7 +53,7 @@ def parse_image_name(name: str) -> RegistryManifestRef:
             port = 443 if prot == "https" else 80
 
         registry = Registry(
-            reg_part,
+            host=reg_part,
             port=port,
             prot=prot,
             host_alias=host_alias if host_alias != reg_part else None,
@@ -81,7 +81,7 @@ def parse_image_name(name: str) -> RegistryManifestRef:
         tag = slash_parts[-1][tag_start + 1 :]
         slash_parts[-1] = slash_parts[-1][0:tag_start]
 
-    return RegistryManifestRef(registry, slash_parts, tag)
+    return RegistryManifestRef(registry=registry, repo=slash_parts, ref=tag)
 
 
 def split_quote(s: str, dels: str, quotes: str = '"', escape: str = "\\") -> List[str]:

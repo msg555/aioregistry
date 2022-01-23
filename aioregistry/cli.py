@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import ssl
 import sys
 
 from .auth import DockerCredentialStore
@@ -20,27 +21,40 @@ async def main() -> None:
     CLI entrypoint that copies an image between two registries.
     """
     parser = argparse.ArgumentParser(
-        description="Copy images between registries. If no dest image is given"
-        " this will simply output the src manifest"
+        description="Copy/inspect registry images",
     )
-    parser.add_argument("--src", required=True, help="Source registry image")
-    parser.add_argument(
-        "--src-ca", required=False, default=None, help="Source CA certificate"
-    )
-    parser.add_argument("--dst", required=False, help="Dest registry image")
-    parser.add_argument(
-        "--dst-ca", required=False, default=None, help="Dest CA certificate"
-    )
+    parser.add_argument("src", help="Source registry image")
+    parser.add_argument("dst", nargs="?", help="Dest registry image")
     parser.add_argument(
         "--tag-pattern",
         action="append",
-        help="Instead of just copying the given tag copy all tags matching a regex pattern",
+        help="Copy/inspect all tags matching regex",
     )
     parser.add_argument(
         "--auth-config",
         required=False,
         default=os.path.expanduser("~/.docker/config.json"),
         help="Path to Docker credential config file",
+    )
+    parser.add_argument(
+        "--insecure",
+        required=False,
+        const=True,
+        action="store_const",
+        default=False,
+        help="Disable server certificate verification",
+    )
+    parser.add_argument(
+        "--cafile",
+        required=False,
+        default=None,
+        help="SSL context CA file",
+    )
+    parser.add_argument(
+        "--capath",
+        required=False,
+        default=None,
+        help="SSL context CA directory",
     )
     parser.add_argument(
         "--verbose",
@@ -65,7 +79,15 @@ async def main() -> None:
         with open(args.auth_config, "r") as fauth:
             creds = DockerCredentialStore(json.load(fauth))
 
-    async with AsyncRegistryClient(creds=creds) as client:
+    ssl_ctx = ssl.create_default_context(
+        cafile=args.cafile,
+        capath=args.capath,
+    )
+    if args.insecure:
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+
+    async with AsyncRegistryClient(creds=creds, ssl_context=ssl_ctx) as client:
         src_ref = parse_image_name(args.src)
         if not args.dst:
             if args.tag_pattern:
@@ -75,8 +97,8 @@ async def main() -> None:
                 ):
                     if not any(re.match(pat, tag) for pat in args.tag_pattern):
                         continue
-                    src_ref.ref = tag
-                    result[tag] = (await client.manifest_download(src_ref)).dict(
+                    the_ref = src_ref.copy(update=dict(ref=tag))
+                    result[tag] = (await client.manifest_download(the_ref)).dict(
                         exclude_unset=True,
                         by_alias=True,
                     )
@@ -94,9 +116,10 @@ async def main() -> None:
             for tag in await client.registry_repo_tags(src_ref.registry, src_ref.repo):
                 if not any(re.match(pat, tag) for pat in args.tag_pattern):
                     continue
-                src_ref.ref = tag
-                dst_ref.ref = tag
                 print(f"Copying {src_ref} to {dst_ref}")
-                await client.copy_refs(src_ref, dst_ref)
+                await client.copy_refs(
+                    src_ref.copy(update=dict(ref=tag)),
+                    dst_ref.copy(update=dict(ref=tag)),
+                )
         else:
             await client.copy_refs(src_ref, dst_ref)

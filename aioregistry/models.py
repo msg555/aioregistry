@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import hashlib
 import re
 from typing import (
@@ -25,7 +24,7 @@ except ImportError:
 MANIFEST_TYPE_MAP = {}
 
 
-class ManifestDescriptor(BaseModel):
+class Descriptor(BaseModel, frozen=True):
     """
     Generic descriptor model used throughout the manifest definitions. These
     objects point to a content addressed object stored elsewhere.
@@ -38,7 +37,7 @@ class ManifestDescriptor(BaseModel):
     annotations: Dict[str, str] = {}
 
 
-class Manifest(BaseModel):
+class Manifest(BaseModel, frozen=True):
     """
     Base Manifest class that supplies some useful methods.
     """
@@ -138,7 +137,7 @@ class ManifestListV2S2(Manifest):
         "application/vnd.docker.distribution.manifest.list.v2+json",
     )
 
-    class ManifestListItem(ManifestDescriptor):
+    class ManifestListItem(Descriptor):
         """Container class for a sub-manifest in a manifest list"""
 
         class PlatformData(BaseModel):
@@ -177,8 +176,8 @@ class ManifestV2S2(Manifest):
 
     schema_version: Literal[2] = Field(..., alias="schemaVersion")
     media_type: Literal[_MEDIA_TYPES] = Field(_MEDIA_TYPES[0], alias="mediaType")  # type: ignore
-    config: ManifestDescriptor
-    layers: List[ManifestDescriptor]
+    config: Descriptor
+    layers: List[Descriptor]
 
     def get_blob_dependencies(self) -> List[str]:
         """Return a list of manifest dependency digests."""
@@ -219,8 +218,7 @@ class ManifestV1(Manifest):
     schemaVersion: int
 
 
-@dataclass
-class Registry:
+class Registry(BaseModel, frozen=True):
     """
     Represents a docker registry.
     """
@@ -238,8 +236,7 @@ class Registry:
         return f"{self.prot}://{self.host}:{self.port}"
 
 
-@dataclass
-class RegistryBlobRef:
+class RegistryBlobRef(BaseModel, frozen=True):
     """
     Represents a blob ref on a registry.
     """

@@ -4,8 +4,10 @@ Module implementing a client for the v2 docker registry API.
 See https://docs.docker.com/registry/spec/api/
 """
 import asyncio
+import hashlib
 import json
 import logging
+import ssl
 from typing import (
     AsyncIterable,
     Dict,
@@ -41,13 +43,12 @@ LOGGER = logging.getLogger(__name__)
 
 class AsyncRegistryClient:
     """
-    Clien
     Class that holds network session and context information.
     """
 
     _ACCEPT_HEADER = ",".join(MANIFEST_TYPE_MAP) + ", */*"
     _DEFAULT_REGISTRY = Registry(
-        "registry-1.docker.io",
+        host="registry-1.docker.io",
         host_alias="docker.io",
     )
     _DEFAULT_TIMEOUT = aiohttp.ClientTimeout(
@@ -64,11 +65,13 @@ class AsyncRegistryClient:
         creds: Optional[CredentialStore] = None,
         timeout: Optional[aiohttp.ClientTimeout] = None,
         default_registry: Optional[Registry] = None,
+        ssl_context: Optional[ssl.SSLContext] = None,
     ) -> None:
         self.custom_session = bool(session)
         self.session = session or aiohttp.ClientSession()
         self.timeout = timeout or self._DEFAULT_TIMEOUT
         self.default_registry = default_registry or self._DEFAULT_REGISTRY
+        self.ssl_context = ssl_context
         self.access_tokens: Dict[Tuple[str, str], str] = {}
         self.creds = creds or DictCredentialStore({})
 
@@ -135,6 +138,7 @@ class AsyncRegistryClient:
                     headers=all_headers,
                     data=data,
                     timeout=self.timeout,
+                    ssl=self.ssl_context,
                 )
             )
             async with acm as response:
@@ -156,6 +160,7 @@ class AsyncRegistryClient:
                 realm + "?" + urllib.parse.urlencode(auth_args),
                 auth=auth,
                 timeout=self.timeout,
+                ssl=self.ssl_context,
             ) as auth_resp:
                 if auth_resp.status != 200:
                     raise RegistryException("Failed to generate authentication token")
@@ -272,6 +277,74 @@ class AsyncRegistryClient:
             media_type=response.headers.get("Content-Type"),
         )
 
+    async def manifest_write(
+        self, ref: RegistryManifestRef, manifest: Manifest
+    ) -> None:
+        """
+        Write a manifest to a registry. If `ref.ref` is empty or is a digest
+        ref, then `ref.ref` will be ignored and the manifest will be pushed
+        untagged using the digest of `manifest.canonical()`.
+        """
+        if not ref.ref or ref.is_digest_ref():
+            ref = ref.copy(update=dict(ref=manifest.digest))
+        async with await self._request(
+            "PUT",
+            ref.registry or self.default_registry,
+            ref.url,
+            data=manifest.canonical(),
+            headers={"Content-Type": manifest.get_media_type()},
+        ) as response:
+            if response.status // 100 != 2:
+                raise RegistryException("Failed to copy manifest")
+
+    async def blob_write(
+        self, ref: RegistryBlobRef, data: AsyncIterable[bytes]
+    ) -> RegistryBlobRef:
+        """
+        Writes a blob to the registry. The digest will be calculated
+        automatically while uploading, ignoring `ref.ref`. A copy of
+        `ref` with `ref.ref` set to the calculated digest will be returned.
+        """
+        # Perform the blob upload flow, POST -> PATCH -> PUT
+        registry = ref.registry or self.default_registry
+        async with await self._request(
+            "POST",
+            registry,
+            ref.upload_url(),
+        ) as response:
+            if response.status // 100 != 2:
+                raise RegistryException(
+                    "Unexpected response attempting to start blob copy"
+                )
+            upload_location = response.headers["Location"]
+
+        hsh = hashlib.sha256()
+        async for chunk in async_generator_buffer(data, 4):
+            hsh.update(chunk)
+            async with await self._request(
+                "PATCH",
+                registry,
+                upload_location,
+                data=chunk,
+                headers={"Content-Type": "application/octet-stream"},
+                has_host=True,
+            ) as response:
+                if response.status // 100 != 2:
+                    raise RegistryException("Unexpected response writing blob data")
+                upload_location = response.headers["Location"]
+        digest = "sha256:" + hsh.hexdigest()
+
+        async with await self._request(
+            "PUT",
+            registry,
+            f"{upload_location}&digest={digest}",
+            has_host=True,
+        ) as response:
+            if response.status // 100 != 2:
+                raise RegistryException("Unexpected response ending blob copy")
+
+        return ref.copy(update=dict(ref=digest))
+
     async def registry_repos(self, registry: Optional[Registry]) -> List[str]:
         """
         Return a list of all repos for the given registry. It is up to the
@@ -325,7 +398,6 @@ class AsyncRegistryClient:
                 LOGGER.info("Skipping copy %s -> %s - already exists", src, dst)
                 return False
 
-        dst_registry = dst.registry or self.default_registry
         if isinstance(src, RegistryManifestRef):
             manifest = await self.manifest_download(src)
 
@@ -353,53 +425,12 @@ class AsyncRegistryClient:
                     for digest in manifest.get_blob_dependencies()
                 ),
             )
-
-            async with await self._request(
-                "PUT",
-                dst_registry,
-                dst.url,
-                data=manifest.canonical(),
-                headers={"Content-Type": manifest.get_media_type()},
-            ) as response:
-                if response.status // 100 != 2:
-                    raise RegistryException("Failed to copy manifest")
+            assert isinstance(dst, RegistryManifestRef)
+            await self.manifest_write(dst, manifest)
 
             LOGGER.info("Copied manifest %s -> %s", src, dst)
             return True
 
-        # Perform the blob upload flow, POST -> PATCH -> PUT
-        async with await self._request(
-            "POST",
-            dst_registry,
-            dst.upload_url(),
-        ) as response:
-            if response.status // 100 != 2:
-                raise RegistryException(
-                    "Unexpected response attempting to start blob copy"
-                )
-            upload_location = response.headers["Location"]
-
-        async for chunk in async_generator_buffer(self.ref_content_stream(src), 4):
-            async with await self._request(
-                "PATCH",
-                dst_registry,
-                upload_location,
-                data=chunk,
-                headers={"Content-Type": "application/octet-stream"},
-                has_host=True,
-            ) as response:
-                if response.status // 100 != 2:
-                    raise RegistryException("Unexpected response writing blob data")
-                upload_location = response.headers["Location"]
-
-        async with await self._request(
-            "PUT",
-            dst_registry,
-            f"{upload_location}&digest={src.ref}",
-            has_host=True,
-        ) as response:
-            if response.status // 100 != 2:
-                raise RegistryException("Unexpected response ending blob copy")
-
+        await self.blob_write(dst, self.ref_content_stream(src))
         LOGGER.info("Copied blob %s -> %s", src, dst)
         return True

@@ -57,7 +57,7 @@ class RegistryTest(unittest.TestCase):
         )
         self._check_image(
             "cbir.clinc.ai/clinc/worker/gpu:v0.7.9",
-            Registry("cbir.clinc.ai"),
+            Registry(host="cbir.clinc.ai"),
             ["clinc", "worker", "gpu"],
             ref="v0.7.9",
         )
@@ -67,7 +67,7 @@ class RegistryTest(unittest.TestCase):
         # localhost is special
         self._check_image(
             "localhost/msg",
-            Registry("localhost", port=80, prot="http"),
+            Registry(host="localhost", port=80, prot="http"),
             ["msg"],
         )
         self._check_image(
@@ -77,39 +77,43 @@ class RegistryTest(unittest.TestCase):
         )
         self._check_image(
             "isa.host/msg",
-            Registry("isa.host"),
+            Registry(host="isa.host"),
             ["msg"],
         )
 
         # Test localhost/isahost with different explicit ports.
         self._check_image(
             "localhost:555/msg",
-            Registry("localhost", port=555, prot="http", host_alias="localhost:555"),
+            Registry(
+                host="localhost", port=555, prot="http", host_alias="localhost:555"
+            ),
             ["msg"],
         )
         self._check_image(
             "isahost:555/msg",
-            Registry("isahost", port=555, prot="https", host_alias="isahost:555"),
+            Registry(host="isahost", port=555, prot="https", host_alias="isahost:555"),
             ["msg"],
         )
         self._check_image(
             "localhost:443/msg",
-            Registry("localhost", port=443, prot="https", host_alias="localhost:443"),
+            Registry(
+                host="localhost", port=443, prot="https", host_alias="localhost:443"
+            ),
             ["msg"],
         )
         self._check_image(
             "isahost:443/msg",
-            Registry("isahost", port=443, prot="https", host_alias="isahost:443"),
+            Registry(host="isahost", port=443, prot="https", host_alias="isahost:443"),
             ["msg"],
         )
         self._check_image(
             "localhost:80/msg",
-            Registry("localhost", port=80, prot="http", host_alias="localhost:80"),
+            Registry(host="localhost", port=80, prot="http", host_alias="localhost:80"),
             ["msg"],
         )
         self._check_image(
             "isahost:80/msg",
-            Registry("isahost", port=80, prot="http", host_alias="isahost:80"),
+            Registry(host="isahost", port=80, prot="http", host_alias="isahost:80"),
             ["msg"],
         )
 
@@ -118,35 +122,43 @@ class RegistryTest(unittest.TestCase):
         # Explicit protocol
         self._check_image(
             "http://localhost/msg",
-            Registry("localhost", port=80, prot="http", host_alias="http://localhost"),
+            Registry(
+                host="localhost", port=80, prot="http", host_alias="http://localhost"
+            ),
             ["msg"],
         )
         self._check_image(
             "http://isahost/msg",
-            Registry("isahost", port=80, prot="http", host_alias="http://isahost"),
+            Registry(host="isahost", port=80, prot="http", host_alias="http://isahost"),
             ["msg"],
         )
         self._check_image(
             "https://localhost/msg",
             Registry(
-                "localhost", port=443, prot="https", host_alias="https://localhost"
+                host="localhost", port=443, prot="https", host_alias="https://localhost"
             ),
             ["msg"],
         )
         self._check_image(
             "https://isahost/msg",
-            Registry("isahost", port=443, prot="https", host_alias="https://isahost"),
+            Registry(
+                host="isahost", port=443, prot="https", host_alias="https://isahost"
+            ),
             ["msg"],
         )
 
         self._check_image(
             "myregistry:555/msg",
-            Registry("myregistry", port=555, prot="https", host_alias="myregistry:555"),
+            Registry(
+                host="myregistry", port=555, prot="https", host_alias="myregistry:555"
+            ),
             ["msg"],
         )
         self._check_image(
             "localhost:443/msg",
-            Registry("localhost", port=443, prot="https", host_alias="localhost:443"),
+            Registry(
+                host="localhost", port=443, prot="https", host_alias="localhost:443"
+            ),
             ["msg"],
         )
 
