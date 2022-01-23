@@ -46,9 +46,9 @@ for layer in manifest.layers:
 
 ```sh
 # By default it will pull credentials based on ~/.docker/config.json 
-python -m pyregistry ubuntu:18.04 my.private.registry/my-repo:my-tag
+python -m aioregistry ubuntu:18.04 my.private.registry/my-repo:my-tag
 ```
 
 ```sh
 # Copy all tags matching regex
-python -m pyregistry ubuntu my.private.registry/my-repo --tag-pattern '18\..*'
+python -m aioregistry ubuntu my.private.registry/my-repo --tag-pattern '18\..*'
