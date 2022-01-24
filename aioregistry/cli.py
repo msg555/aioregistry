@@ -13,12 +13,13 @@ import sys
 
 from .auth import DockerCredentialStore
 from .client import AsyncRegistryClient
+from .models import RegistryBlobRef, RegistryManifestRef
 from .parsing import parse_image_name
 
 
-async def main() -> None:
+def parse_args():
     """
-    CLI entrypoint that copies an image between two registries.
+    Setup and parse CLI arguments.
     """
     parser = argparse.ArgumentParser(
         description="Copy/inspect registry images",
@@ -26,9 +27,17 @@ async def main() -> None:
     parser.add_argument("src", help="Source registry image")
     parser.add_argument("dst", nargs="?", help="Dest registry image")
     parser.add_argument(
+        "--blob",
+        required=False,
+        const=True,
+        action="store_const",
+        default=False,
+        help="Copy/inspect a blob instead of a manifest",
+    )
+    parser.add_argument(
         "--tag-pattern",
         action="append",
-        help="Copy/inspect all tags matching regex",
+        help="Copy/inspect all tags matching regex. Not compatible with --blob",
     )
     parser.add_argument(
         "--auth-config",
@@ -62,17 +71,41 @@ async def main() -> None:
         action="count",
         default=0,
     )
-    args = parser.parse_args()
+    return parser.parse_args()
 
+
+def setup_logging(verbose: int) -> None:
     log_level = logging.WARN
-    if args.verbose > 1:
+    if verbose > 1:
         log_level = logging.DEBUG
-    elif args.verbose:
+    elif verbose:
         log_level = logging.INFO
     logging.basicConfig(
         level=log_level,
         format="%(message)s",
     )
+
+
+def _convert_to_blob_ref(ref: RegistryManifestRef) -> RegistryBlobRef:
+    """
+    Convert a manifest ref into a blob ref of the same repo/ref.
+    """
+    if not ref.is_digest_ref():
+        sys.stderr.write("Can only copy/inspect blobs by digest")
+        sys.exit(1)
+    return RegistryBlobRef(
+        registry=ref.registry,
+        repo=ref.repo,
+        ref=ref.ref,
+    )
+
+
+async def main() -> None:
+    """
+    CLI entrypoint that copies an image between two registries.
+    """
+    args = parse_args()
+    setup_logging(args.verbose)
 
     creds = None
     if args.auth_config:
@@ -87,9 +120,15 @@ async def main() -> None:
         ssl_ctx.check_hostname = False
         ssl_ctx.verify_mode = ssl.CERT_NONE
 
+    src_ref = parse_image_name(args.src)
+
     async with AsyncRegistryClient(creds=creds, ssl_context=ssl_ctx) as client:
-        src_ref = parse_image_name(args.src)
         if not args.dst:
+            if args.blob:
+                async for chunk in client.ref_content_stream(_convert_to_blob_ref(src_ref)):
+                    sys.stdout.buffer.write(chunk)
+                return
+
             if args.tag_pattern:
                 result = {}
                 for tag in await client.registry_repo_tags(
@@ -112,6 +151,8 @@ async def main() -> None:
             return
 
         dst_ref = parse_image_name(args.dst)
+        if args.blob:
+            await client.copy_refs(src_ref, _convert_to_blob_ref(dst_ref))
         if args.tag_pattern:
             for tag in await client.registry_repo_tags(src_ref.registry, src_ref.repo):
                 if not any(re.match(pat, tag) for pat in args.tag_pattern):
