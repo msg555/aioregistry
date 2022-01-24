@@ -150,7 +150,7 @@ class ManifestListV2S2(Manifest):
             variant: str = ""
             features: List[str] = []
 
-        platform: PlatformData
+        platform: Optional[PlatformData] = None
 
     schema_version: Literal[2] = Field(..., alias="schemaVersion")
     media_type: Optional[Literal[_MEDIA_TYPES]] = Field(  # type: ignore

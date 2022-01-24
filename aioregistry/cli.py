@@ -75,6 +75,9 @@ def parse_args():
 
 
 def setup_logging(verbose: int) -> None:
+    """
+    Setup logging configuration for CLI
+    """
     log_level = logging.WARN
     if verbose > 1:
         log_level = logging.DEBUG
@@ -125,7 +128,9 @@ async def main() -> None:
     async with AsyncRegistryClient(creds=creds, ssl_context=ssl_ctx) as client:
         if not args.dst:
             if args.blob:
-                async for chunk in client.ref_content_stream(_convert_to_blob_ref(src_ref)):
+                async for chunk in client.ref_content_stream(
+                    _convert_to_blob_ref(src_ref)
+                ):
                     sys.stdout.buffer.write(chunk)
                 return
 
