@@ -26,6 +26,7 @@ from .auth import (
 )
 from .exceptions import RegistryException
 from .models import (
+    Descriptor,
     MANIFEST_TYPE_MAP,
     Manifest,
     Registry,
@@ -168,49 +169,53 @@ class AsyncRegistryClient:
 
             first_attempt = False
 
-    async def ref_exists(self, ref: RegistryBlobRef) -> bool:
+    async def ref_lookup(self, ref: RegistryBlobRef) -> Optional[Descriptor]:
         """
-        Test if the object exists in the remote registry. If the registry
-        returns 404 Not Found or 401 Unauthorized this will return false. Any
-        other response wil raise a RegistryException.
+        Attempts to lookup the requested ref and return a :class:`Descriptor`
+        representation. The descriptor includes the media type, digest, and
+        size information of the object.
+
+        If the registry returns a 404 Not Found or 401 Unauthorized this method
+        will return None. Any other failure to retrieve metadata about the
+        object will raise an exception.
         """
         registry = ref.registry or self.default_registry
         try:
             async with await self._request("HEAD", registry, ref.url) as response:
-                if response.status == 200:
-                    return True
                 if response.status in (401, 404):
-                    return False
-                raise RegistryException("Unexpected response from registry")
-        except aiohttp.ClientError as exc:
-            raise RegistryException("failed to contact registry") from exc
+                    return None
+                if response.status != 200:
+                    raise RegistryException("Unexpected response from registry")
 
-    async def manifest_resolve_tag(
-        self, ref: RegistryManifestRef
-    ) -> RegistryManifestRef:
-        """
-        Attempts to resolve the passed manifest ref into a manifest ref identified
-        by a digest. If the manifest ref already is a digest-based ref then it will
-        just return `ref`.
-        """
-        if ref.is_digest_ref():
-            return ref
-
-        registry = ref.registry or self.default_registry
-        try:
-            async with await self._request("HEAD", registry, ref.url) as response:
-                if response.status == 200:
+                # Extract digest
+                if ref.is_digest_ref():
+                    digest = ref.ref
+                else:
                     digest = response.headers.get("Docker-Content-Digest")
                     if digest is None:
-                        raise RegistryException("No digest given by server for tag")
-                    return RegistryManifestRef(
-                        registry=ref.registry,
-                        repo=ref.repo,
-                        ref=digest,
-                    )
-                if response.status in (401, 404):
-                    raise RegistryException("Cannot access repo")
-                raise RegistryException("Unexpected response from registry")
+                        raise RegistryException("No digest given by server for tag ref")
+
+                # Extract media type
+                media_type = response.headers.get("Content-Type")
+                if media_type is None:
+                    raise RegistryException("No content type given by server")
+
+                # Extract size
+                size = response.headers.get("Content-Length")
+                if size is None:
+                    raise RegistryException("No content length given by server")
+                try:
+                    isize = int(size)
+                except ValueError as exc:
+                    raise RegistryException(
+                        "Invalid content length given by server"
+                    ) from exc
+
+                return Descriptor(
+                    mediaType=media_type,
+                    size=isize,
+                    digest=digest,
+                )
         except aiohttp.ClientError as exc:
             raise RegistryException("failed to contact registry") from exc
 
@@ -394,7 +399,7 @@ class AsyncRegistryClient:
 
         # Check if ref already exists
         if src.is_digest_ref():
-            if await self.ref_exists(dst):
+            if await self.ref_lookup(dst) is not None:
                 LOGGER.info("Skipping copy %s -> %s - already exists", src, dst)
                 return False
 

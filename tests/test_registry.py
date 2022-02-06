@@ -6,7 +6,7 @@ import unittest
 
 from aioregistry.client import AsyncRegistryClient
 from aioregistry.exceptions import RegistryException
-from aioregistry.models import Registry
+from aioregistry.models import Descriptor, Registry
 from aioregistry.parsing import parse_image_name
 
 
@@ -166,14 +166,19 @@ class RegistryTest(unittest.TestCase):
     async def test_exists(self) -> None:
         """Test behavior of ManifestRef.exists()"""
         async with AsyncRegistryClient() as client:
-            self.assertTrue(
-                await client.ref_exists(parse_image_name("msg555/ubuntu:_test_tag_"))
+            self.assertEqual(
+                await client.ref_lookup(parse_image_name("msg555/ubuntu:_test_tag_")),
+                Descriptor(
+                    mediaType="application/vnd.docker.distribution.manifest.list.v2+json",
+                    digest="sha256:d789606e6a1d43b506fc816023ab94f67117ca66488590e99e53369f61dd1477",
+                    size=2035,
+                ),
             )
-            self.assertFalse(
-                await client.ref_exists(parse_image_name("msg555/ubuntu:_fake_tag_"))
+            self.assertIsNone(
+                await client.ref_lookup(parse_image_name("msg555/ubuntu:_fake_tag_"))
             )
             with self.assertRaises(RegistryException):
-                await client.ref_exists(
+                await client.ref_lookup(
                     parse_image_name("fake.repo/msg555/ubuntu:_fake_tag_")
                 )
 
