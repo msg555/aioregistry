@@ -162,6 +162,48 @@ class RegistryTest(unittest.TestCase):
             ["msg"],
         )
 
+    def test_registry_str(self) -> None:
+        """
+        Test Registry's string representation
+        """
+        self.assertEqual(str(Registry(host="abc")), "abc")
+        self.assertEqual(str(Registry(host="abc-123", host_alias="abc")), "abc")
+        self.assertEqual(str(Registry(host="abc", port=80, prot="http")), "abc:80")
+        self.assertEqual(
+            str(Registry(host="abc", port=80, prot="https")), "https://abc:80"
+        )
+        self.assertEqual(
+            str(Registry(host="abc", port=443, prot="http")), "http://abc:443"
+        )
+        self.assertEqual(str(Registry(host="abc", port=443, prot="https")), "abc")
+        self.assertEqual(
+            str(Registry(host="abc", port=555, prot="http")), "http://abc:555"
+        )
+        self.assertEqual(str(Registry(host="abc", port=555, prot="https")), "abc:555")
+
+        self.assertEqual(str(Registry(host="localhost")), "localhost:443")
+        self.assertEqual(
+            str(Registry(host="localhost", port=80, prot="http")), "localhost"
+        )
+        self.assertEqual(
+            str(Registry(host="localhost", port=80, prot="https")),
+            "https://localhost:80",
+        )
+        self.assertEqual(
+            str(Registry(host="localhost", port=443, prot="http")),
+            "http://localhost:443",
+        )
+        self.assertEqual(
+            str(Registry(host="localhost", port=443, prot="https")), "localhost:443"
+        )
+        self.assertEqual(
+            str(Registry(host="localhost", port=555, prot="http")), "localhost:555"
+        )
+        self.assertEqual(
+            str(Registry(host="localhost", port=555, prot="https")),
+            "https://localhost:555",
+        )
+
     @asyncio_run
     async def test_exists(self) -> None:
         """Test behavior of ManifestRef.exists()"""

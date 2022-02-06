@@ -228,6 +228,20 @@ class Registry(BaseModel, frozen=True):
     prot: str = "https"
     host_alias: Optional[str] = None
 
+    def __str__(self) -> str:
+        if self.host_alias is not None:
+            return self.host_alias
+        default_prot, default_port = "https", 443
+        if self.host == "localhost":
+            default_prot, default_port = "http", 80
+        if self.prot == default_prot and self.port == default_port:
+            return self.host
+        if self.prot == default_prot and self.port not in (80, 443):
+            return f"{self.host}:{self.port}"
+        if self.prot != default_prot and default_port + self.port == 80 + 443:
+            return f"{self.host}:{self.port}"
+        return f"{self.prot}://{self.host}:{self.port}"
+
     @property
     def url(self) -> str:
         """
