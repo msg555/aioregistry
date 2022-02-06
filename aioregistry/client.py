@@ -155,7 +155,13 @@ class AsyncRegistryClient:
                 auth_parts[i]: auth_parts[i + 2]
                 for i in range(0, len(auth_parts) - 2, 4)
             }
-            realm = auth_args.pop("realm")
+            realm = auth_args.pop("realm", "")
+            if realm is None:
+                raise RegistryException("Expected authentication realm")
+            auth_args = {
+                k: v for k, v in auth_args.items()
+                if k in ("scope", "service")
+            }
 
             async with self.session.get(
                 realm + "?" + urllib.parse.urlencode(auth_args),
