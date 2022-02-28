@@ -159,8 +159,7 @@ class AsyncRegistryClient:
             if realm is None:
                 raise RegistryException("Expected authentication realm")
             auth_args = {
-                k: v for k, v in auth_args.items()
-                if k in ("scope", "service")
+                k: v for k, v in auth_args.items() if k in ("scope", "service")
             }
 
             async with self.session.get(
