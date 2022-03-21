@@ -2,9 +2,11 @@
 Expose public aioregistry interface
 """
 from .auth import (
+    ChainedCredentialStore,
     CredentialStore,
     DockerCredentialStore,
     DictCredentialStore,
+    default_credential_store,
 )
 from .client import AsyncRegistryClient
 from .exceptions import RegistryException
