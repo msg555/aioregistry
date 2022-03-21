@@ -52,6 +52,9 @@ def parse_image_name(name: str) -> RegistryManifestRef:
         if port is None:
             port = 443 if prot == "https" else 80
 
+        if reg_part == "docker.io":
+            reg_part = "registry-1.docker.io"
+
         registry = Registry(
             host=reg_part,
             port=port,

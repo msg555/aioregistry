@@ -44,6 +44,16 @@ class RegistryTest(unittest.TestCase):
             ["library", "ubuntu"],
         )
         self._check_image(
+            "docker.io/library/ubuntu",
+            Registry(
+                host="registry-1.docker.io",
+                port=443,
+                prot="https",
+                host_alias="docker.io",
+            ),
+            ["library", "ubuntu"],
+        )
+        self._check_image(
             "ubuntu:18.04",
             None,
             ["library", "ubuntu"],
