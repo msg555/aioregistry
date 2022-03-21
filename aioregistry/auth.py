@@ -33,9 +33,9 @@ class CredentialStore(metaclass=abc.ABCMeta):
 
 class DockerCredentialStore(CredentialStore):
     """
-    Implements a credential store that understands the Docker credential config
-    format. See
-    https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+    Implements a credential store that understands the containers auth
+    config format. See
+    https://github.com/containers/image/blob/main/docs/containers-auth.json.5.md
     for more information on this format.
     """
 
@@ -53,15 +53,13 @@ class DockerCredentialStore(CredentialStore):
         }
 
     @classmethod
-    def from_file(cls, path=None) -> "DockerCredentialStore":
+    def from_file(cls, path: str) -> "DockerCredentialStore":
         """
-        Load the docker config from a file. If `path` is None then the default
-        path for docker config will be used.
+        Load the docker config from a file.
 
         Raises FileNotFoundError if the file could not be opened.
         """
-        path = path or os.path.expanduser("~/.docker/config.json")
-        with open(path, "r") as fconfig:
+        with open(path, "r", encoding="utf-8") as fconfig:
             return cls(json.load(fconfig))
 
     @staticmethod
@@ -143,3 +141,50 @@ class DictCredentialStore(CredentialStore):
         Return the credentials in the dict if they exist.
         """
         return self.auth_map.get(host)
+
+
+class ChainedCredentialStore(CredentialStore):
+    """
+    Chains multiple other credential stores together. The earliest providers
+    will be queried first. If credentials are successfully returned by a
+    provider no other providers in the chain will be queried.
+    """
+
+    def __init__(self, *providers: CredentialStore) -> None:
+        self.providers = list(providers)
+
+    async def get(self, host: str) -> Optional[Tuple[str, str]]:
+        """
+        Find the first provider with credentials for the host.
+        """
+        for provider in self.providers:
+            creds = await provider.get(host)
+            if creds is not None:
+                return creds
+        return None
+
+
+def default_credential_store() -> CredentialStore:
+    """
+    Creates a credential stored that queries all the paths described in
+    https://github.com/containers/image/blob/main/docs/containers-auth.json.5.md
+    """
+    paths = []
+    if runtime_dir := os.getenv("XDG_RUNTIME_DIR", ""):
+        paths.append(os.path.join(runtime_dir, "containers/auth.json"))
+    if config_home := os.getenv("XDG_CONFIG_HOME", ""):
+        paths.append(os.path.join(config_home, ".config/containers/auth.json"))
+    elif home_dir := os.getenv("HOME", ""):
+        paths.append(os.path.join(home_dir, ".config/containers/auth.json"))
+    if home_dir := os.getenv("HOME", ""):
+        paths.append(os.path.join(home_dir, ".docker/config.json"))
+        paths.append(os.path.join(home_dir, ".dockercfg"))
+
+    providers = []
+    for path in paths:
+        try:
+            with open(path, "r", encoding="utf-8") as fconfig:
+                providers.append(DockerCredentialStore(json.load(fconfig)))
+        except FileNotFoundError:
+            pass
+    return ChainedCredentialStore(*providers)

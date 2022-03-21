@@ -285,11 +285,13 @@ class RegistryBlobRef(BaseModel, frozen=True):
     def __str__(self) -> str:
         return self.name(truncate=True)
 
-    def name(self, truncate=False) -> str:
+    def name(self, *, truncate=False, include_ref=True) -> str:
         """Return the full blob name"""
         repo_name = "/".join(self.repo)
         if self.registry:
             repo_name = f"{self.registry}/{repo_name}"
+        if not include_ref:
+            return repo_name
         if self.is_digest_ref():
             return f"{repo_name}@{self.ref[7:14] if truncate else self.ref}"
         return f"{repo_name}:{self.ref}"
