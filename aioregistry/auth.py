@@ -100,7 +100,12 @@ class DockerCredentialStore(CredentialStore):
         we'll attempt to query the helper and cache the result if the program
         exits correctly.
         """
-        host = self.HOST_REMAP.get(host, host)
+        # If there is a remap for the host try that first, then try the host
+        # itself.
+        remap_host = self.HOST_REMAP.get(host)
+        if remap_host is not None:
+            if remap_result := await self.get(remap_host):
+                return remap_result
 
         # Return credentials from cache if they exist.
         auth = self.auths.get(host, False)
