@@ -158,12 +158,18 @@ class AsyncRegistryClient:
             realm = auth_args.pop("realm", "")
             if realm is None:
                 raise RegistryException("Expected authentication realm")
-            auth_args = {
-                k: v for k, v in auth_args.items() if k in ("scope", "service")
-            }
+
+            query_parts = []
+            if service := auth_args.get("service"):
+                query_parts.append(("service", service))
+            query_parts.extend(
+                ("scope", scope)
+                for scope in auth_args.get("scope", "").split(" ")
+                if scope
+            )
 
             async with self.session.get(
-                realm + "?" + urllib.parse.urlencode(auth_args),
+                realm + "?" + urllib.parse.urlencode(query_parts),
                 auth=auth,
                 timeout=self.timeout,
                 ssl=self.ssl_context,
@@ -402,6 +408,10 @@ class AsyncRegistryClient:
                     "Cannot copy to a content address that does not match the source"
                 )
 
+        if src == dst:
+            LOGGER.info("skipping copy of identical refs")
+            return False
+
         # Check if ref already exists
         if src.is_digest_ref():
             if await self.ref_lookup(dst) is not None:
@@ -440,6 +450,32 @@ class AsyncRegistryClient:
 
             LOGGER.info("Copied manifest %s -> %s", src, dst)
             return True
+
+        # Attempt mount if blobs come from the same registry.
+        if src.registry == dst.registry:
+            query_str = urllib.parse.urlencode(
+                {
+                    "from": "/".join(src.repo),
+                    "mount": dst.ref,
+                }
+            )
+            async with await self._request(
+                "POST",
+                dst.registry or self.default_registry,
+                f"v2/{'/'.join(dst.repo)}/blobs/uploads/?{query_str}",
+            ) as response:
+                if response.status == 201:
+                    LOGGER.info(
+                        "Mounted blob %s from %s",
+                        dst.ref,
+                        "/".join(src.repo),
+                    )
+                    return True
+                LOGGER.warning(
+                    "mount failed with status %s, trying copy",
+                    response.status,
+                )
+                raise Exception("no")
 
         await self.blob_write(dst, self.ref_content_stream(src))
         LOGGER.info("Copied blob %s -> %s", src, dst)
