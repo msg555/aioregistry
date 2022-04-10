@@ -219,19 +219,23 @@ class RegistryTest(unittest.TestCase):
         """Test behavior of ManifestRef.exists()"""
         async with AsyncRegistryClient() as client:
             self.assertEqual(
-                await client.ref_lookup(parse_image_name("msg555/ubuntu:_test_tag_")),
+                await client.ref_lookup(
+                    parse_image_name("msg555/aioregistry-test:test_tag")
+                ),
                 Descriptor(
-                    mediaType="application/vnd.docker.distribution.manifest.list.v2+json",
-                    digest="sha256:d789606e6a1d43b506fc816023ab94f67117ca66488590e99e53369f61dd1477",
-                    size=2035,
+                    mediaType="application/vnd.docker.distribution.manifest.v2+json",
+                    digest="sha256:359966c4859d1b2cbff80120cf25e0d1dfcd0c03efa398754da4af9a5b9fa255",
+                    size=524,
                 ),
             )
             self.assertIsNone(
-                await client.ref_lookup(parse_image_name("msg555/ubuntu:_fake_tag_"))
+                await client.ref_lookup(
+                    parse_image_name("msg555/aioregistry-test:fake_tag")
+                )
             )
             with self.assertRaises(RegistryException):
                 await client.ref_lookup(
-                    parse_image_name("fake.repo/msg555/ubuntu:_fake_tag_")
+                    parse_image_name("fake.repo/msg555/aioregistry-test:fake_tag")
                 )
 
 

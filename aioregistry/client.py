@@ -180,6 +180,25 @@ class AsyncRegistryClient:
 
             first_attempt = False
 
+    async def ref_delete(self, ref: RegistryBlobRef) -> bool:
+        """
+        Attempts to delete a reference from the registry. This is only supported
+        for non-digest manifest references.
+
+        Returns True if the delete succeeded. If permission is denied or the ref
+        does not exist returns False. Other failures will raise an exception.
+        """
+        registry = ref.registry or self.default_registry
+        try:
+            async with await self._request("DELETE", registry, ref.url) as response:
+                if response.status in (401, 404):
+                    return False
+                if response.status != 202:
+                    raise RegistryException("Delete failed")
+                return True
+        except aiohttp.ClientError as exc:
+            raise RegistryException("failed to contact registry") from exc
+
     async def ref_lookup(self, ref: RegistryBlobRef) -> Optional[Descriptor]:
         """
         Attempts to lookup the requested ref and return a :class:`Descriptor`
