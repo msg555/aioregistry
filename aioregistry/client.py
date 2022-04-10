@@ -252,7 +252,7 @@ class AsyncRegistryClient:
     async def ref_content_stream(
         self,
         ref: RegistryBlobRef,
-        chunk_size: int = 2 ** 20,
+        chunk_size: int = 2**20,
     ) -> AsyncIterable[bytes]:
         """
         Stream the contents of `ref` as an async iterable of `chunk_size` bytes
