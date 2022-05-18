@@ -10,6 +10,9 @@ import os
 import re
 import ssl
 import sys
+from typing import Callable, Optional
+
+import pydantic
 
 from .auth import DockerCredentialStore
 from .client import AsyncRegistryClient
@@ -38,6 +41,14 @@ def parse_args():
         "--tag-pattern",
         action="append",
         help="Copy/inspect all tags matching regex. Not compatible with --blob",
+    )
+    parser.add_argument(
+        "--descriptor",
+        required=False,
+        const=True,
+        action="store_const",
+        default=False,
+        help="Print a descriptor of the objects instead of the objects themselves",
     )
     parser.add_argument(
         "--auth-config",
@@ -103,7 +114,7 @@ def _convert_to_blob_ref(ref: RegistryManifestRef) -> RegistryBlobRef:
     )
 
 
-async def main() -> None:
+async def main() -> int:
     """
     CLI entrypoint that copies an image between two registries.
     """
@@ -126,15 +137,33 @@ async def main() -> None:
     src_ref = parse_image_name(args.src)
 
     async with AsyncRegistryClient(creds=creds, ssl_context=ssl_ctx) as client:
+
+        def _convert_object(obj: Optional[pydantic.BaseModel]):
+            if obj is None:
+                return None
+            return obj.dict(
+                exclude_unset=True,
+                by_alias=True,
+            )
+
+        get_object: Callable = (
+            client.ref_lookup if args.descriptor else client.manifest_download
+        )
+
         if not args.dst:
             if args.blob:
-                async for chunk in client.ref_content_stream(
-                    _convert_to_blob_ref(src_ref)
-                ):
-                    sys.stdout.buffer.write(chunk)
-                return
+                if args.descriptor:
+                    result = _convert_object(
+                        await client.ref_lookup(_convert_to_blob_ref(src_ref))
+                    )
+                else:
+                    async for chunk in client.ref_content_stream(
+                        _convert_to_blob_ref(src_ref)
+                    ):
+                        sys.stdout.buffer.write(chunk)
+                    return 0
 
-            if args.tag_pattern:
+            elif args.tag_pattern:
                 result = {}
                 for tag in await client.registry_repo_tags(
                     src_ref.registry, src_ref.repo
@@ -142,18 +171,12 @@ async def main() -> None:
                     if not any(re.match(pat, tag) for pat in args.tag_pattern):
                         continue
                     the_ref = src_ref.copy(update=dict(ref=tag))
-                    result[tag] = (await client.manifest_download(the_ref)).dict(
-                        exclude_unset=True,
-                        by_alias=True,
-                    )
+                    result[tag] = _convert_object(await get_object(the_ref))
             else:
-                result = (await client.manifest_download(src_ref)).dict(
-                    exclude_unset=True,
-                    by_alias=True,
-                )
+                result = _convert_object(await get_object(src_ref))
             json.dump(result, sys.stdout, indent=2)
             sys.stdout.write("\n")
-            return
+            return 0
 
         dst_ref = parse_image_name(args.dst)
         if args.blob:
@@ -169,3 +192,5 @@ async def main() -> None:
                 )
         else:
             await client.copy_refs(src_ref, dst_ref)
+
+    return 0

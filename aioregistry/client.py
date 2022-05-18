@@ -215,6 +215,7 @@ class AsyncRegistryClient:
                 if response.status in (401, 404):
                     return None
                 if response.status != 200:
+                    print(response.status, await response.content.read())
                     raise RegistryException("Unexpected response from registry")
 
                 # Extract digest
