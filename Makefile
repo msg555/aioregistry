@@ -6,9 +6,11 @@ all: format lint test docs
 
 format:
 	$(PYTHON) -m black .
+	$(PYTHON) -m isort --profile=black .
 
 format-check:
 	$(PYTHON) -m black --check .
+	$(PYTHON) -m isort --profile=black --check .
 
 pylint:
 	$(PYTHON) -m pylint aioregistry tests

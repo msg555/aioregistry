@@ -1,9 +1,6 @@
 from typing import List, Optional
 
-from .models import (
-    Registry,
-    RegistryManifestRef,
-)
+from .models import Registry, RegistryManifestRef
 
 
 def parse_image_name(name: str) -> RegistryManifestRef:

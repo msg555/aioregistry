@@ -6,10 +6,7 @@ import base64
 import unittest
 from unittest.mock import patch
 
-from aioregistry.auth import (
-    DictCredentialStore,
-    DockerCredentialStore,
-)
+from aioregistry.auth import DictCredentialStore, DockerCredentialStore
 
 
 def asyncio_run(corofunc):

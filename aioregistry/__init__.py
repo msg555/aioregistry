@@ -4,18 +4,18 @@ Expose public aioregistry interface
 from .auth import (
     ChainedCredentialStore,
     CredentialStore,
-    DockerCredentialStore,
     DictCredentialStore,
+    DockerCredentialStore,
     default_credential_store,
 )
 from .client import AsyncRegistryClient
 from .exceptions import RegistryException
 from .models import (
-    Manifest,
     Descriptor,
+    Manifest,
     ManifestListV2S2,
-    ManifestV2S2,
     ManifestV1,
+    ManifestV2S2,
     Registry,
     RegistryBlobRef,
     RegistryManifestRef,

@@ -8,36 +8,23 @@ import hashlib
 import json
 import logging
 import ssl
-from typing import (
-    AsyncIterable,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
 import urllib.parse
+from typing import AsyncIterable, Dict, List, Optional, Tuple, Union
 
 import aiohttp
 
-from .auth import (
-    CredentialStore,
-    DictCredentialStore,
-)
+from .auth import CredentialStore, DictCredentialStore
 from .exceptions import RegistryException
 from .models import (
-    Descriptor,
     MANIFEST_TYPE_MAP,
+    Descriptor,
     Manifest,
     Registry,
     RegistryBlobRef,
     RegistryManifestRef,
 )
 from .parsing import split_quote
-from .utils import (
-    ReleaseableAsyncContextManager,
-    async_generator_buffer,
-)
+from .utils import ReleaseableAsyncContextManager, async_generator_buffer
 
 LOGGER = logging.getLogger(__name__)
 
