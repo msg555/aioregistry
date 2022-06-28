@@ -9,7 +9,8 @@ import json
 import logging
 import os
 import subprocess
-from typing import Any, Mapping, Optional, Tuple
+from datetime import datetime, timedelta
+from typing import Any, Awaitable, Dict, Mapping, Optional, Tuple
 
 LOGGER = logging.getLogger(__name__)
 
@@ -169,7 +170,30 @@ class ChainedCredentialStore(CredentialStore):
         return None
 
 
-def default_credential_store() -> CredentialStore:
+class CachingStore(CredentialStore):
+    """
+    Wrapper around a credential store that caches results for a TTL.
+    """
+
+    def __init__(self, provider: CredentialStore, ttl: timedelta) -> None:
+        self.provider = provider
+        self.ttl = ttl
+        self.cache_data: Dict[str, Tuple[Awaitable[Tuple[str, str]], datetime]] = {}
+
+    async def get(self, host: str) -> Optional[Tuple[str, str]]:
+        """
+        Check cache for result, go to provider if not cached.
+        """
+        now = datetime.now()
+        creds_task, cache_time = self.cache_data.get(host, (None, None))
+        if creds_task is None or cache_time is None or now - cache_time > self.ttl:
+            creds_task = asyncio.create_task(self.provider.get(host))  # type: ignore
+            self.cache_data[host] = (creds_task, now)
+
+        return await creds_task
+
+
+def default_credential_store(ttl=timedelta(minutes=1)) -> CredentialStore:
     """
     Creates a credential stored that queries all the paths described in
     https://github.com/containers/image/blob/main/docs/containers-auth.json.5.md
@@ -192,4 +216,4 @@ def default_credential_store() -> CredentialStore:
                 providers.append(DockerCredentialStore(json.load(fconfig)))
         except FileNotFoundError:
             pass
-    return ChainedCredentialStore(*providers)
+    return CachingStore(ChainedCredentialStore(*providers), ttl=ttl)

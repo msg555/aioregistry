@@ -9,7 +9,16 @@ import json
 import logging
 import ssl
 import urllib.parse
-from typing import AsyncIterable, Dict, List, Optional, Tuple, Union
+from typing import (
+    AsyncIterable,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import aiohttp
 
@@ -29,6 +38,48 @@ from .utils import ReleaseableAsyncContextManager, async_generator_buffer
 LOGGER = logging.getLogger(__name__)
 
 
+def _get_descriptor_from_response(
+    ref: RegistryBlobRef, response: aiohttp.ClientResponse
+) -> Optional[Descriptor]:
+    """
+    Extract a descriptor from a response. Return None if the descriptor does
+    not exist or if we are unauthorized to access it.
+    """
+    if response.status in (401, 404):
+        return None
+    if response.status != 200:
+        raise RegistryException("Unexpected response from registry")
+
+    # Extract digest
+    digest: Optional[str]
+    if ref.is_digest_ref():
+        digest = ref.ref
+    else:
+        digest = response.headers.get("Docker-Content-Digest")
+        if digest is None:
+            raise RegistryException("No digest given by server for tag ref")
+
+    # Extract media type
+    media_type = response.headers.get("Content-Type")
+    if media_type is None:
+        raise RegistryException("No content type given by server")
+
+    # Extract size
+    size = response.headers.get("Content-Length")
+    if size is None:
+        raise RegistryException("No content length given by server")
+    try:
+        isize = int(size)
+    except ValueError as exc:
+        raise RegistryException("Invalid content length given by server") from exc
+
+    return Descriptor(
+        mediaType=media_type,
+        size=isize,
+        digest=digest,
+    )
+
+
 class AsyncRegistryClient:
     """
     Class that holds network session and context information.
@@ -42,8 +93,8 @@ class AsyncRegistryClient:
     _DEFAULT_TIMEOUT = aiohttp.ClientTimeout(
         total=None,
         connect=None,
-        sock_connect=10,
-        sock_read=10,
+        sock_connect=None,
+        sock_read=None,
     )
 
     def __init__(
@@ -78,7 +129,6 @@ class AsyncRegistryClient:
         *,
         headers: Optional[Dict[str, str]] = None,
         data: Optional[Union[str, bytes]] = None,
-        has_host: bool = False,
     ):
         """
         Make a request to a registry, applying the appropriate credentials.
@@ -87,7 +137,7 @@ class AsyncRegistryClient:
         """
         # Parse URL and determine the the authentication key for any
         # authentication tokens.
-        url = path if has_host else f"{registry.url}/{path}"
+        url = urllib.parse.urljoin(registry.url, path)
         url_data = urllib.parse.urlparse(url)
         path_parts = url_data.path.split("/")
         auth_key = (url_data.hostname or "", "/".join(path_parts[0:4]))
@@ -199,61 +249,23 @@ class AsyncRegistryClient:
         registry = ref.registry or self.default_registry
         try:
             async with await self._request("HEAD", registry, ref.url) as response:
-                if response.status in (401, 404):
-                    return None
-                if response.status != 200:
-                    print(response.status, await response.content.read())
-                    raise RegistryException("Unexpected response from registry")
-
-                # Extract digest
-                if ref.is_digest_ref():
-                    digest = ref.ref
-                else:
-                    digest = response.headers.get("Docker-Content-Digest")
-                    if digest is None:
-                        raise RegistryException("No digest given by server for tag ref")
-
-                # Extract media type
-                media_type = response.headers.get("Content-Type")
-                if media_type is None:
-                    raise RegistryException("No content type given by server")
-
-                # Extract size
-                size = response.headers.get("Content-Length")
-                if size is None:
-                    raise RegistryException("No content length given by server")
-                try:
-                    isize = int(size)
-                except ValueError as exc:
-                    raise RegistryException(
-                        "Invalid content length given by server"
-                    ) from exc
-
-                return Descriptor(
-                    mediaType=media_type,
-                    size=isize,
-                    digest=digest,
-                )
+                return _get_descriptor_from_response(ref, response)
         except aiohttp.ClientError as exc:
             raise RegistryException("failed to contact registry") from exc
 
     async def ref_content_stream(
         self,
         ref: RegistryBlobRef,
-        chunk_size: int = 2**20,
-    ) -> AsyncIterable[bytes]:
+        chunk_size: int = 10 * 2**20,
+    ) -> Tuple[Descriptor, AsyncIterable[bytes]]:
         """
-        Stream the contents of `ref` as an async iterable of `chunk_size` bytes
-        objects. The last chunk may be smaller than `chunk_size`.
+        Returns a descriptor of the blob and an async iterable of the data that yields
+        chunks of `chunk_size` bytes. The last chunk may be smaller than `chunk_size`.
         """
-        registry = ref.registry or self.default_registry
-        try:
-            async with await self._request("GET", registry, ref.url) as response:
-                if response.status != 200:
-                    raise RegistryException(
-                        f"Unexpected response from registry HTTP {response.status}"
-                    )
 
+        async def _chunk_rest(acm):
+            """Helper method to chunk the response data as an async iterable"""
+            async with acm as response:
                 cur_chunk: List[bytes] = []
                 cur_chunk_size = 0
                 async for chunk in response.content.iter_chunked(chunk_size):
@@ -269,11 +281,19 @@ class AsyncRegistryClient:
                     else:
                         cur_chunk.append(chunk)
 
+                if cur_chunk:
+                    yield b"".join(cur_chunk)
+
+        registry = ref.registry or self.default_registry
+        try:
+            acm = await self._request("GET", registry, ref.url)
+            async with acm as response:
+                descriptor = _get_descriptor_from_response(ref, response)
+                if descriptor is None:
+                    raise RegistryException("Could not find blob")
+                return descriptor, _chunk_rest(acm.release())
         except aiohttp.ClientError as exc:
             raise RegistryException("failed to contact registry") from exc
-
-        if cur_chunk:
-            yield b"".join(cur_chunk)
 
     async def manifest_download(self, ref: RegistryManifestRef) -> Manifest:
         """
@@ -321,12 +341,21 @@ class AsyncRegistryClient:
                 raise RegistryException("Failed to copy manifest")
 
     async def blob_write(
-        self, ref: RegistryBlobRef, data: AsyncIterable[bytes]
+        self,
+        ref: RegistryBlobRef,
+        data: AsyncIterable[bytes],
+        *,
+        progress_callback: Optional[Callable[[int], Awaitable[None]]] = None,
     ) -> RegistryBlobRef:
         """
         Writes a blob to the registry. The digest will be calculated
         automatically while uploading, ignoring `ref.ref`. A copy of
         `ref` with `ref.ref` set to the calculated digest will be returned.
+
+        progress_callback is an optional coroutine function that if given will
+        be called periodically as data is written with the number of bytes
+        written. It is guaranteed that the last call for a successful write
+        will be the total number of bytes written.
         """
         # Perform the blob upload flow, POST -> PATCH -> PUT
         registry = ref.registry or self.default_registry
@@ -335,33 +364,55 @@ class AsyncRegistryClient:
             registry,
             ref.upload_url(),
         ) as response:
-            if response.status // 100 != 2:
+            if response.status != 202:
                 raise RegistryException(
                     "Unexpected response attempting to start blob copy"
                 )
             upload_location = response.headers["Location"]
 
         hsh = hashlib.sha256()
+        offset = 0
         async for chunk in async_generator_buffer(data, 4):
+            LOGGER.debug("Writing chunk %d - %d", offset, offset + len(chunk) - 1)
+
+            headers = {
+                "Content-Length": str(len(chunk)),
+                "Content-Range": f"{offset}-{offset+len(chunk)-1}",
+                "Content-Type": "application/octet-stream",
+            }
             hsh.update(chunk)
             async with await self._request(
                 "PATCH",
                 registry,
                 upload_location,
                 data=chunk,
-                headers={"Content-Type": "application/octet-stream"},
-                has_host=True,
+                headers=headers,
             ) as response:
                 if response.status // 100 != 2:
                     raise RegistryException("Unexpected response writing blob data")
-                upload_location = response.headers["Location"]
+                upload_location = urllib.parse.urljoin(
+                    upload_location,
+                    response.headers["Location"],
+                )
+            offset += len(chunk)
+            if progress_callback is not None:
+                await progress_callback(offset)
+
         digest = "sha256:" + hsh.hexdigest()
+
+        try:
+            upload_url = urllib.parse.urlparse(upload_location)
+            query_data = urllib.parse.parse_qsl(upload_url.query)
+        except ValueError as exc:
+            raise RegistryException(
+                "Unexpected upload URL format from registry"
+            ) from exc
+        query_data.append(("digest", digest))
 
         async with await self._request(
             "PUT",
             registry,
-            f"{upload_location}&digest={digest}",
-            has_host=True,
+            upload_url._replace(query=urllib.parse.urlencode(query_data)).geturl(),
         ) as response:
             if response.status // 100 != 2:
                 raise RegistryException("Unexpected response ending blob copy")
@@ -402,10 +453,23 @@ class AsyncRegistryClient:
                     "Unexpected response getting repo tags"
                 ) from exc
 
-    async def copy_refs(self, src: RegistryBlobRef, dst: RegistryBlobRef) -> bool:
+    async def copy_refs(
+        self,
+        src: RegistryBlobRef,
+        dst: RegistryBlobRef,
+        *,
+        layer_progress: Optional[
+            Callable[[RegistryBlobRef, RegistryBlobRef, int, int], Awaitable[None]]
+        ] = None,
+    ) -> bool:
         """
         Copy the blob src to dst. Returns True if any data was copied and
         False if the content already existed.
+
+        layer_progress can be provided as a coroutine function take takes arguments
+        (src, dst, total_bytes, written_bytes). It will be called periodically when
+        copying blob data. It is guaranteed that for a successful copy the last call
+        will have total_bytes == written_bytes.
         """
         if src.OBJECT_TYPE != dst.OBJECT_TYPE:
             raise ValueError("Cannot copy ref to different object type")
@@ -437,6 +501,7 @@ class AsyncRegistryClient:
                         RegistryManifestRef(
                             registry=dst.registry, repo=dst.repo, ref=digest
                         ),
+                        layer_progress=layer_progress,
                     )
                     for digest in manifest.get_manifest_dependencies()
                 ),
@@ -448,6 +513,7 @@ class AsyncRegistryClient:
                         RegistryBlobRef(
                             registry=dst.registry, repo=dst.repo, ref=digest
                         ),
+                        layer_progress=layer_progress,
                     )
                     for digest in manifest.get_blob_dependencies()
                 ),
@@ -484,6 +550,13 @@ class AsyncRegistryClient:
                 )
                 raise Exception("no")
 
-        await self.blob_write(dst, self.ref_content_stream(src))
+        async def write_callback(
+            bytes_written: int,
+        ) -> None:  # pylint: disable=function-redefined
+            if layer_progress is not None:
+                await layer_progress(src, dst, desc.size, bytes_written)
+
+        desc, content_stream = await self.ref_content_stream(src)
+        await self.blob_write(dst, content_stream, progress_callback=write_callback)
         LOGGER.info("Copied blob %s -> %s", src, dst)
         return True

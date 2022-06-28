@@ -6,15 +6,21 @@ Script entrypoint for copying images between registries.
 import argparse
 import json
 import logging
-import os
 import re
 import ssl
 import sys
-from typing import Callable, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import pydantic
 
-from .auth import DockerCredentialStore
+try:
+    from tqdm import tqdm  # type: ignore
+    from tqdm.contrib.logging import logging_redirect_tqdm  # type: ignore
+except ImportError:
+    tqdm = None
+    logging_redirect_tqdm = None
+
+from .auth import CredentialStore, DockerCredentialStore, default_credential_store
 from .client import AsyncRegistryClient
 from .models import RegistryBlobRef, RegistryManifestRef
 from .parsing import parse_image_name
@@ -53,7 +59,7 @@ def parse_args():
     parser.add_argument(
         "--auth-config",
         required=False,
-        default=os.path.expanduser("~/.docker/config.json"),
+        default=None,
         help="Path to Docker credential config file",
     )
     parser.add_argument(
@@ -121,10 +127,23 @@ async def main() -> int:
     args = parse_args()
     setup_logging(args.verbose)
 
-    creds = None
+    if logging_redirect_tqdm is not None:
+        with logging_redirect_tqdm():
+            return await _main(args)
+
+    return await _main(args)
+
+
+async def _main(args) -> int:
+    """
+    Helper CLI entrypoint after logging setup and arguments parsed.
+    """
+    creds: CredentialStore
     if args.auth_config:
         with open(args.auth_config, "r") as fauth:
             creds = DockerCredentialStore(json.load(fauth))
+    else:
+        creds = default_credential_store()  # pylint: disable=redefined-variable-type
 
     ssl_ctx = ssl.create_default_context(
         cafile=args.cafile,
@@ -135,6 +154,30 @@ async def main() -> int:
         ssl_ctx.verify_mode = ssl.CERT_NONE
 
     src_ref = parse_image_name(args.src)
+
+    progress_map: Dict[int, Tuple[Any, int]] = {}
+
+    async def _progress(src, dst, bytes_total, bytes_written):
+        # pylint: disable=unused-argument
+        if tqdm is None:
+            print(
+                f"Copying {dst} {bytes_written}/{bytes_total} {100*bytes_written/bytes_total:.1f}%"
+            )
+        else:
+            t, bytes_last = progress_map.get(id(dst), (None, 0))
+            if t is None:
+                t = tqdm(
+                    desc=dst.ref[7:15],
+                    total=bytes_total,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                ).__enter__()
+            t.update(bytes_written - bytes_last)
+            progress_map[id(dst)] = (t, bytes_written)
+            if bytes_written == bytes_total:
+                with t:
+                    pass
 
     async with AsyncRegistryClient(creds=creds, ssl_context=ssl_ctx) as client:
 
@@ -157,9 +200,10 @@ async def main() -> int:
                         await client.ref_lookup(_convert_to_blob_ref(src_ref))
                     )
                 else:
-                    async for chunk in client.ref_content_stream(
+                    _, content_stream = await client.ref_content_stream(
                         _convert_to_blob_ref(src_ref)
-                    ):
+                    )
+                    async for chunk in content_stream:
                         sys.stdout.buffer.write(chunk)
                     return 0
 
@@ -180,8 +224,12 @@ async def main() -> int:
 
         dst_ref = parse_image_name(args.dst)
         if args.blob:
-            await client.copy_refs(src_ref, _convert_to_blob_ref(dst_ref))
-        if args.tag_pattern:
+            await client.copy_refs(
+                _convert_to_blob_ref(src_ref),
+                _convert_to_blob_ref(dst_ref),
+                layer_progress=_progress,
+            )
+        elif args.tag_pattern:
             for tag in await client.registry_repo_tags(src_ref.registry, src_ref.repo):
                 if not any(re.match(pat, tag) for pat in args.tag_pattern):
                     continue
@@ -189,8 +237,9 @@ async def main() -> int:
                 await client.copy_refs(
                     src_ref.copy(update=dict(ref=tag)),
                     dst_ref.copy(update=dict(ref=tag)),
+                    layer_progress=_progress,
                 )
         else:
-            await client.copy_refs(src_ref, dst_ref)
+            await client.copy_refs(src_ref, dst_ref, layer_progress=_progress)
 
     return 0
