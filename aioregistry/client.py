@@ -256,7 +256,7 @@ class AsyncRegistryClient:
     async def ref_content_stream(
         self,
         ref: RegistryBlobRef,
-        chunk_size: int = 10 * 2**20,
+        chunk_size: int = 5 * 2**20,
     ) -> Tuple[Descriptor, AsyncIterable[bytes]]:
         """
         Returns a descriptor of the blob and an async iterable of the data that yields
@@ -369,6 +369,9 @@ class AsyncRegistryClient:
                     "Unexpected response attempting to start blob copy"
                 )
             upload_location = response.headers["Location"]
+
+        if progress_callback is not None:
+            await progress_callback(0)
 
         hsh = hashlib.sha256()
         offset = 0

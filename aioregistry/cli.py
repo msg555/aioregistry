@@ -175,9 +175,6 @@ async def _main(args) -> int:
                 ).__enter__()
             t.update(bytes_written - bytes_last)
             progress_map[id(dst)] = (t, bytes_written)
-            if bytes_written == bytes_total:
-                with t:
-                    pass
 
     async with AsyncRegistryClient(creds=creds, ssl_context=ssl_ctx) as client:
 
