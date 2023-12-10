@@ -89,8 +89,6 @@ class Manifest(BaseModel, frozen=True):
             )
         return self.json(
             exclude_unset=True,
-            sort_keys=True,
-            separators=(",", ":"),
             ensure_ascii=False,
             by_alias=True,
         )

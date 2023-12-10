@@ -22,6 +22,7 @@ from typing import (
 )
 
 import aiohttp
+from pydantic import BaseModel, Field, ValidationError
 
 from .auth import CredentialStore, DictCredentialStore
 from .exceptions import RegistryException
@@ -37,6 +38,14 @@ from .parsing import split_quote
 from .utils import ReleaseableAsyncContextManager, async_generator_buffer
 
 LOGGER = logging.getLogger(__name__)
+
+
+class AccessTokenResponse(BaseModel):
+    """
+    Model to capture auth response
+    """
+
+    access_token: str = Field(..., alias="token")
 
 
 def _get_descriptor_from_response(
@@ -214,7 +223,16 @@ class AsyncRegistryClient:
             ) as auth_resp:
                 if auth_resp.status != 200:
                     raise RegistryException("Failed to generate authentication token")
-                self.access_tokens[auth_key] = (await auth_resp.json())["access_token"]
+
+                try:
+                    auth_response_data = AccessTokenResponse.parse_raw(
+                        await auth_resp.read()
+                    )
+                except ValidationError as exc:
+                    raise RegistryException(
+                        "Got unexpected auth data response"
+                    ) from exc
+                self.access_tokens[auth_key] = auth_response_data.access_token
 
             first_attempt = False
 
