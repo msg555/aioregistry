@@ -1,4 +1,5 @@
 import hashlib
+import json
 import re
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple
 
@@ -79,19 +80,18 @@ class Manifest(BaseModel, frozen=True):
         """
         Calculate the canonical JSON representation.
         """
+        as_dict = self.dict(
+            exclude_unset=True,
+            by_alias=True,
+        )
         if self.get_media_type().startswith("application/vnd.docker."):
-            return self.json(
-                exclude_unset=True,
+            return json.dumps(
+                as_dict,
                 indent=3,
                 separators=(",", ": "),
                 ensure_ascii=False,
-                by_alias=True,
             )
-        return self.json(
-            exclude_unset=True,
-            ensure_ascii=False,
-            by_alias=True,
-        )
+        return json.dumps(as_dict, ensure_ascii=False)
 
     def get_media_type(self) -> str:
         """
