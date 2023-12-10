@@ -10,6 +10,7 @@ import logging
 import ssl
 import urllib.parse
 from typing import (
+    Any,
     AsyncIterable,
     Awaitable,
     Callable,
@@ -263,7 +264,7 @@ class AsyncRegistryClient:
         chunks of `chunk_size` bytes. The last chunk may be smaller than `chunk_size`.
         """
 
-        async def _chunk_rest(acm):
+        async def _chunk_rest(acm: Any) -> AsyncIterable[bytes]:
             """Helper method to chunk the response data as an async iterable"""
             async with acm as response:
                 cur_chunk: List[bytes] = []
@@ -329,7 +330,7 @@ class AsyncRegistryClient:
         untagged using the digest of `manifest.canonical()`.
         """
         if not ref.ref or ref.is_digest_ref():
-            ref = ref.copy(update=dict(ref=manifest.digest))
+            ref = ref.copy(update={"ref": manifest.digest})
         async with await self._request(
             "PUT",
             ref.registry or self.default_registry,
@@ -420,7 +421,7 @@ class AsyncRegistryClient:
             if response.status // 100 != 2:
                 raise RegistryException("Unexpected response ending blob copy")
 
-        return ref.copy(update=dict(ref=digest))
+        return ref.copy(update={"ref": digest})
 
     async def registry_repos(self, registry: Optional[Registry]) -> List[str]:
         """
@@ -551,7 +552,6 @@ class AsyncRegistryClient:
                     "mount failed with status %s, trying copy",
                     response.status,
                 )
-                raise Exception("no")
 
         async def write_callback(
             bytes_written: int,

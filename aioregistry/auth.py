@@ -76,7 +76,7 @@ class DockerCredentialStore(CredentialStore):
         # Query the storage helper.
         try:
             presult = await asyncio.create_subprocess_exec(
-                "docker-credential-{}".format(store),
+                f"docker-credential-{store}",
                 "get",
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,

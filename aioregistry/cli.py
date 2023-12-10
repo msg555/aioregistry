@@ -140,7 +140,7 @@ async def _main(args) -> int:
     """
     creds: CredentialStore
     if args.auth_config:
-        with open(args.auth_config, "r") as fauth:
+        with open(args.auth_config, "r", encoding="utf-8") as fauth:
             creds = DockerCredentialStore(json.load(fauth))
     else:
         creds = default_credential_store()  # pylint: disable=redefined-variable-type
@@ -166,6 +166,7 @@ async def _main(args) -> int:
         else:
             t, bytes_last = progress_map.get(id(dst), (None, 0))
             if t is None:
+                # pylint: disable=unnecessary-dunder-call
                 t = tqdm(
                     desc=dst.ref[7:15],
                     total=bytes_total,
@@ -211,7 +212,7 @@ async def _main(args) -> int:
                 ):
                     if not any(re.match(pat, tag) for pat in args.tag_pattern):
                         continue
-                    the_ref = src_ref.copy(update=dict(ref=tag))
+                    the_ref = src_ref.copy(update={"ref": tag})
                     result[tag] = _convert_object(await get_object(the_ref))
             else:
                 result = _convert_object(await get_object(src_ref))
@@ -232,8 +233,8 @@ async def _main(args) -> int:
                     continue
                 print(f"Copying {src_ref} to {dst_ref}")
                 await client.copy_refs(
-                    src_ref.copy(update=dict(ref=tag)),
-                    dst_ref.copy(update=dict(ref=tag)),
+                    src_ref.copy(update={"ref": tag}),
+                    dst_ref.copy(update={"ref": tag}),
                     layer_progress=_progress,
                 )
         else:

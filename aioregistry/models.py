@@ -1,15 +1,8 @@
 import hashlib
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
-
-try:
-    from typing import Literal
-except ImportError:
-    # python 3.7 compatibility
-    from typing_extensions import Literal  # type: ignore
-
 
 # https://docs.docker.com/registry/spec/manifest-v2-2/
 # https://github.com/opencontainers/image-spec/blob/main/media-types.md#compatibility-matrix
@@ -34,10 +27,13 @@ class Manifest(BaseModel, frozen=True):
     Base Manifest class that supplies some useful methods.
     """
 
+    MEDIA_TYPES: ClassVar[Tuple[str, ...]]
+
     @classmethod
-    def __init_subclass__(cls):
-        for media_type in getattr(cls, "_MEDIA_TYPES", ()):
+    def __init_subclass__(cls, *args, **kwargs) -> None:
+        for media_type in getattr(cls, "MEDIA_TYPES", ()):
             MANIFEST_TYPE_MAP[media_type] = cls
+        super().__init_subclass__(*args, **kwargs)
 
     @classmethod
     def parse(
@@ -107,7 +103,7 @@ class Manifest(BaseModel, frozen=True):
         """
         # pylint: disable=no-member
         if isinstance(self, ManifestV1):
-            return self._MEDIA_TYPES[0]
+            return self.MEDIA_TYPES[0]
         return self.media_type  # type: ignore
 
     def get_manifest_dependencies(self) -> List[str]:
@@ -119,20 +115,20 @@ class Manifest(BaseModel, frozen=True):
         return []
 
 
-class ManifestListV2S2(Manifest):
+class ManifestListV2S2(Manifest, frozen=True):
     """
     Manifest list type
     """
 
-    _MEDIA_TYPES = (
+    MEDIA_TYPES = (
         "application/vnd.oci.image.index.v1+json",
         "application/vnd.docker.distribution.manifest.list.v2+json",
     )
 
-    class ManifestListItem(Descriptor):
+    class ManifestListItem(Descriptor, frozen=True):
         """Container class for a sub-manifest in a manifest list"""
 
-        class PlatformData(BaseModel):
+        class PlatformData(BaseModel, frozen=True):
             """Container class for platform data in a manifest list"""
 
             architecture: str
@@ -145,8 +141,8 @@ class ManifestListV2S2(Manifest):
         platform: Optional[PlatformData] = None
 
     schema_version: Literal[2] = Field(..., alias="schemaVersion")
-    media_type: Optional[Literal[_MEDIA_TYPES]] = Field(  # type: ignore
-        _MEDIA_TYPES[0], alias="mediaType"
+    media_type: Optional[Literal[MEDIA_TYPES]] = Field(  # type: ignore
+        MEDIA_TYPES[0], alias="mediaType"
     )
     manifests: List[ManifestListItem]
     annotations: Dict[str, str] = {}
@@ -156,18 +152,18 @@ class ManifestListV2S2(Manifest):
         return [manifest.digest for manifest in self.manifests]
 
 
-class ManifestV2S2(Manifest):
+class ManifestV2S2(Manifest, frozen=True):
     """
     Single image manifest
     """
 
-    _MEDIA_TYPES = (
+    MEDIA_TYPES = (
         "application/vnd.oci.image.manifest.v1+json",
         "application/vnd.docker.distribution.manifest.v2+json",
     )
 
     schema_version: Literal[2] = Field(..., alias="schemaVersion")
-    media_type: Literal[_MEDIA_TYPES] = Field(_MEDIA_TYPES[0], alias="mediaType")  # type: ignore
+    media_type: Literal[MEDIA_TYPES] = Field(MEDIA_TYPES[0], alias="mediaType")  # type: ignore
     config: Descriptor
     layers: List[Descriptor]
 
@@ -178,7 +174,7 @@ class ManifestV2S2(Manifest):
         return result
 
 
-class ManifestV1(Manifest):
+class ManifestV1(Manifest, frozen=True):
     """
     Legacy manifest type.
 
@@ -187,17 +183,17 @@ class ManifestV1(Manifest):
     is a legacy media type support is unlikely to be added.
     """
 
-    _MEDIA_TYPES = (
+    MEDIA_TYPES = (
         "application/vnd.docker.distribution.manifest.v1+json",
         "application/vnd.docker.distribution.manifest.v1+prettyjws",
     )
 
-    class BlobData(BaseModel):
+    class BlobData(BaseModel, frozen=True):
         """Container class for manifest blob data"""
 
         blob_sum: str = Field(..., alias="blobSum")
 
-    class HistoryData(BaseModel):
+    class HistoryData(BaseModel, frozen=True):
         """Container class for manifest history data"""
 
         v1_compatibility: str = Field(..., alias="v1Compatibility")
@@ -247,7 +243,7 @@ class RegistryBlobRef(BaseModel, frozen=True):
     Represents a blob ref on a registry.
     """
 
-    OBJECT_TYPE = "blobs"
+    OBJECT_TYPE: ClassVar[str] = "blobs"
 
     registry: Optional[Registry]
     repo: List[str]
@@ -264,9 +260,7 @@ class RegistryBlobRef(BaseModel, frozen=True):
         """
         Returns the url path that should be used to initiate a blob upload.
         """
-        return "v2/{}/{}/uploads/{}".format(
-            "/".join(self.repo), self.OBJECT_TYPE, upload_uuid
-        )
+        return f"v2/{'/'.join(self.repo)}/{self.OBJECT_TYPE}/uploads/{upload_uuid}"
 
     def is_digest_ref(self) -> bool:
         """
@@ -289,7 +283,7 @@ class RegistryBlobRef(BaseModel, frozen=True):
         return f"{repo_name}:{self.ref}"
 
 
-class RegistryManifestRef(RegistryBlobRef):
+class RegistryManifestRef(RegistryBlobRef, frozen=True):
     """
     Represents a manifest ref in a registry.
     """

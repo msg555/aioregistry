@@ -1,6 +1,6 @@
- pyregistry
+# AIORegistry
 
-pyregistry is a Python library and CLI tool for inspecting and copying container image data
+`aioregistry` is a Python library and CLI tool for inspecting and copying container image data
 from and between registries.
 
 This library primarily focuses on being a useful tool for dealing with container image
