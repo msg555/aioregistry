@@ -4,6 +4,7 @@ Script entrypoint for copying images between registries.
 """
 
 import argparse
+import asyncio
 import json
 import logging
 import re
@@ -241,3 +242,8 @@ async def _main(args) -> int:
             await client.copy_refs(src_ref, dst_ref, layer_progress=_progress)
 
     return 0
+
+
+def sync_main() -> int:
+    """Synchronous entry point"""
+    return asyncio.run(main())

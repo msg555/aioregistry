@@ -1,7 +1,0 @@
-"""Main CLI entry point for aioregistry """
-
-import sys
-from .cli import main
-
-sys.argv[0] = "aioregistry"
-sys.exit(main())
