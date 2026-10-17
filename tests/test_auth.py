@@ -1,6 +1,7 @@
 """
 Tests for the aioregistry.auth module
 """
+
 import asyncio
 import base64
 import unittest

@@ -1,6 +1,7 @@
 """
 Tests for the Registry library.
 """
+
 import asyncio
 import unittest
 

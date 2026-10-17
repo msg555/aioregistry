@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 # https://docs.docker.com/registry/spec/manifest-v2-2/
 # https://github.com/opencontainers/image-spec/blob/main/media-types.md#compatibility-matrix
-MANIFEST_TYPE_MAP = {}
+MANIFEST_TYPE_MAP: dict[str, type["Manifest"]] = {}
 
 
 class Descriptor(BaseModel, frozen=True):

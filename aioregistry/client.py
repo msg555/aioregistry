@@ -3,6 +3,7 @@ Module implementing a client for the v2 docker registry API.
 
 See https://docs.docker.com/registry/spec/api/
 """
+
 import asyncio
 import hashlib
 import json
@@ -186,7 +187,7 @@ class AsyncRegistryClient:
                     headers=all_headers,
                     data=data,
                     timeout=self.timeout,
-                    ssl=self.ssl_context,
+                    ssl=self.ssl_context or False,
                 )
             )
             async with acm as response:
@@ -219,7 +220,7 @@ class AsyncRegistryClient:
                 realm + "?" + urllib.parse.urlencode(query_parts),
                 auth=auth,
                 timeout=self.timeout,
-                ssl=self.ssl_context,
+                ssl=self.ssl_context or False,
             ) as auth_resp:
                 if auth_resp.status != 200:
                     raise RegistryException("Failed to generate authentication token")

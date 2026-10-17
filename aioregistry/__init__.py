@@ -1,6 +1,7 @@
 """
 Expose public aioregistry interface
 """
+
 from .auth import (
     ChainedCredentialStore,
     CredentialStore,

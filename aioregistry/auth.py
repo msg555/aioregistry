@@ -2,6 +2,7 @@
 Defines the CredentialStore interface responsible for providing authentication
 to registries.
 """
+
 import abc
 import asyncio
 import base64
