@@ -327,7 +327,8 @@ class AsyncRegistryClient:
                         f"Unexpected response from registry HTTP {response.status}"
                     )
                 try:
-                    manifest_data = json.loads(await response.text(encoding="utf-8"))
+                    canonical_data = await response.text(encoding="utf-8")
+                    manifest_data = json.loads(canonical_data)
                 except ValueError as exc:
                     raise RegistryException(
                         "Failed decoding JSON response from registry"
@@ -335,10 +336,12 @@ class AsyncRegistryClient:
         except aiohttp.ClientError as exc:
             raise RegistryException("failed to contact registry") from exc
 
-        return Manifest.parse(
+        result = Manifest.parse(
             manifest_data,
             media_type=response.headers.get("Content-Type"),
         )
+        result.__dict__["_canonical"] = canonical_data
+        return result
 
     async def manifest_write(
         self, ref: RegistryManifestRef, manifest: Manifest

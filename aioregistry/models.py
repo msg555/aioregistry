@@ -80,18 +80,25 @@ class Manifest(BaseModel, frozen=True):
         """
         Calculate the canonical JSON representation.
         """
+        canonical = self.__dict__.get("_canonical")
+        if canonical is not None:
+            return canonical
+
         as_dict = self.dict(
             exclude_unset=True,
             by_alias=True,
         )
         if self.get_media_type().startswith("application/vnd.docker."):
-            return json.dumps(
+            canonical = json.dumps(
                 as_dict,
                 indent=3,
                 separators=(",", ": "),
                 ensure_ascii=False,
             )
-        return json.dumps(as_dict, ensure_ascii=False)
+        else:
+            canonical = json.dumps(as_dict, ensure_ascii=False)
+        self.__dict__["_canonical"] = canonical
+        return canonical
 
     def get_media_type(self) -> str:
         """
