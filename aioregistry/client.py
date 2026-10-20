@@ -484,6 +484,7 @@ class AsyncRegistryClient:
         src: RegistryBlobRef,
         dst: RegistryBlobRef,
         *,
+        max_uploads: int = 8,
         layer_progress: Optional[
             Callable[[RegistryBlobRef, RegistryBlobRef, int, int], Awaitable[None]]
         ] = None,
@@ -497,6 +498,23 @@ class AsyncRegistryClient:
         copying blob data. It is guaranteed that for a successful copy the last call
         will have total_bytes == written_bytes.
         """
+        return await self._copy_refs(
+            src,
+            dst,
+            upload_semaphore=asyncio.Semaphore(max_uploads),
+            layer_progress=layer_progress,
+        )
+
+    async def _copy_refs(
+        self,
+        src: RegistryBlobRef,
+        dst: RegistryBlobRef,
+        *,
+        upload_semaphore: asyncio.Semaphore,
+        layer_progress: Optional[
+            Callable[[RegistryBlobRef, RegistryBlobRef, int, int], Awaitable[None]]
+        ] = None,
+    ) -> bool:
         if src.OBJECT_TYPE != dst.OBJECT_TYPE:
             raise ValueError("Cannot copy ref to different object type")
         if dst.is_digest_ref():
@@ -520,25 +538,27 @@ class AsyncRegistryClient:
 
             await asyncio.gather(
                 *(
-                    self.copy_refs(
+                    self._copy_refs(
                         RegistryManifestRef(
                             registry=src.registry, repo=src.repo, ref=digest
                         ),
                         RegistryManifestRef(
                             registry=dst.registry, repo=dst.repo, ref=digest
                         ),
+                        upload_semaphore=upload_semaphore,
                         layer_progress=layer_progress,
                     )
                     for digest in manifest.get_manifest_dependencies()
                 ),
                 *(
-                    self.copy_refs(
+                    self._copy_refs(
                         RegistryBlobRef(
                             registry=src.registry, repo=src.repo, ref=digest
                         ),
                         RegistryBlobRef(
                             registry=dst.registry, repo=dst.repo, ref=digest
                         ),
+                        upload_semaphore=upload_semaphore,
                         layer_progress=layer_progress,
                     )
                     for digest in manifest.get_blob_dependencies()
@@ -581,7 +601,8 @@ class AsyncRegistryClient:
             if layer_progress is not None:
                 await layer_progress(src, dst, desc.size, bytes_written)
 
-        desc, content_stream = await self.ref_content_stream(src)
-        await self.blob_write(dst, content_stream, progress_callback=write_callback)
+        async with upload_semaphore:
+            desc, content_stream = await self.ref_content_stream(src)
+            await self.blob_write(dst, content_stream, progress_callback=write_callback)
         LOGGER.info("Copied blob %s -> %s", src, dst)
         return True
