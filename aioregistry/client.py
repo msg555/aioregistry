@@ -528,7 +528,7 @@ class AsyncRegistryClient:
             return False
 
         # Check if ref already exists
-        if src.is_digest_ref():
+        if src.is_digest_ref() and dst.is_digest_ref():
             if await self.ref_lookup(dst) is not None:
                 LOGGER.info("Skipping copy %s -> %s - already exists", src, dst)
                 return False
